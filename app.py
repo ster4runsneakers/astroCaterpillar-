@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Protected Admin Database & Database Backup)
+# app.py - AstroCaterpillar Micro-App (Monthly Transits Engine)
 import datetime
 import json
 import sqlite3
@@ -11,7 +11,7 @@ from ephemeris_engine import calculate_natal_positions, calculate_houses
 from interpretations_el import get_sign_from_degrees
 from elements_engine import calculate_elements_and_modalities
 from natal_aspects_engine import calculate_natal_aspects
-from synastry_engine import calculate_synastry_aspects
+from synastry_engine import calculate_synastry_aspects, calculate_monthly_transits
 from chinese_astrology import get_chinese_zodiac
 from chart_plotter import plot_natal_chart, plot_biwheel_chart
 
@@ -32,7 +32,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- DATABASE SETUP (ADMIN ONLY) ---
+# --- DATABASE SETUP ---
 DB_FILE = "astro_data.db"
 
 def init_db():
@@ -90,7 +90,6 @@ def delete_profile_from_db(name):
     conn.close()
 
 def export_db_as_json():
-    """Εξάγει όλα τα προφίλ σε μορφή JSON string."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('SELECT name, date_str, time_str, city, positions_json FROM profiles')
@@ -189,7 +188,7 @@ st.sidebar.markdown("---")
 
 menu_options = [
     "1. Γενέθλιος Χάρτης" if lang == "el" else "1. Natal Chart",
-    "2. Διελεύσεις" if lang == "el" else "2. Transits",
+    "2. Μηνιαίες Διελεύσεις" if lang == "el" else "2. Monthly Transits",
     "3. Συναστρία" if lang == "el" else "3. Synastry",
     "4. Εξαγωγή PDF" if lang == "el" else "4. PDF Export",
     "5. Admin Panel"
@@ -268,16 +267,31 @@ if menu_choice.startswith("1."):
                 ans = ask_caterpillar_chat(report_text, user_q, lang=lang)
                 st.write(ans)
 
-# --- TAB 2: TRANSITS ---
+# --- TAB 2: MONTHLY TRANSITS ---
 elif menu_choice.startswith("2."):
-    st.header(f"📅 Διελεύσεις: {selected_profile}" if lang == "el" else f"📅 Transits: {selected_profile}")
-    target_date = st.date_input("Επιλογή Ημερομηνίας Διέλευσης:" if lang == "el" else "Select Transit Date:", datetime.date.today())
+    st.header(f"📅 Μηνιαίες Διελεύσεις: {selected_profile}" if lang == "el" else f"📅 Monthly Transits: {selected_profile}")
     
-    if st.button("🔮 Ανάλυση Διελεύσεων" if lang == "el" else "🔮 Analyze Transits"):
-        with st.spinner("Υπολογισμός..." if lang == "el" else "Calculating..."):
-            transit_pos = calculate_natal_positions(target_date.year, target_date.month, target_date.day, 12.0)
-            transit_aspects = calculate_synastry_aspects(prof_data["positions"], transit_pos)
-            report = analyze_transits_ai(selected_profile, target_date.strftime("%d/%m/%Y"), str(transit_aspects), lang=lang)
+    col_t1, col_t2 = st.columns(2)
+    
+    months_el = ["Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος", "Ιούλιος", "Αύγουστος", "Σεπτέμβριος", "Οκτώβριος", "Νοέμβριος", "Δεκέμβριος"]
+    months_en = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    months_list = months_el if lang == "el" else months_en
+    
+    current_month = datetime.date.today().month
+    current_year = datetime.date.today().year
+    
+    with col_t1:
+        sel_month_name = st.selectbox("Επιλογή Μήνα:" if lang == "el" else "Select Month:", months_list, index=current_month - 1)
+        sel_month_num = months_list.index(sel_month_name) + 1
+    with col_t2:
+        sel_year = st.number_input("Επιλογή Έτους:" if lang == "el" else "Select Year:", min_value=2024, max_value=2035, value=current_year)
+    
+    timeframe_label = f"{sel_month_name} {sel_year}"
+    
+    if st.button("🔮 Στρατηγική Ανάλυση Μήνα" if lang == "el" else "🔮 Analyze Monthly Trends"):
+        with st.spinner("Υπολογισμός Μακρο-Κύκλων..." if lang == "el" else "Calculating Macro Cycles..."):
+            m_transits = calculate_monthly_transits(prof_data["positions"], sel_year, sel_month_num)
+            report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang)
             st.markdown(report)
 
 # --- TAB 3: SYNASTRY ---
