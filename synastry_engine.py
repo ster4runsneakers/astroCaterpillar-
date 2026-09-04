@@ -23,36 +23,62 @@ def calculate_synastry_aspects(pos1: dict, pos2: dict) -> list:
     return aspects
 
 
-def calculate_monthly_transits(natal_positions: dict, year: int, month: int) -> list:
+
+def calculate_monthly_transits(natal_positions: dict, year: int, month: int):
     """
-    Υπολογίζει τις μηνιαίες διελεύσεις εστιάζοντας στους μακρο-κύκλους (αργοί πλανήτες)
-    και διαχωρίζοντας τους γρήγορους πλανήτες ως triggers.
+    Υπολογίζει τις σημαντικές διελεύσεις του μήνα σε σχέση με τις γενέθλιες θέσεις.
+    Διαχειρίζεται αυτόματα είτε float μοίρες είτε dictionaries της μορφής {'deg': float, ...}.
     """
-    from ephemeris_engine import calculate_natal_positions
-    
-    # Υπολογισμός πλανητικών θέσεων στα μέσα του μήνα (15η ημέρα, 12:00)
-    mid_month_positions = calculate_natal_positions(year, month, 15, 12.0)
-    
-    outer_planets = ["Jupiter", "Saturn", "Uranus", "Neptune", "Pluto", "Mars"]
-    transits = []
-    
-    for t_planet, t_deg in mid_month_positions.items():
-        for n_planet, n_deg in natal_positions.items():
+    # Βοηθητική συνάρτηση για ασφαλή εξαγωγή μοιρών
+    def _safe_extract_deg(val):
+        if isinstance(val, dict):
+            return float(val.get("deg", 0.0))
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return 0.0
+
+    # Καθαρισμός των γενέθλιων μοιρών
+    clean_natal = {planet: _safe_extract_deg(pos) for planet, pos in natal_positions.items()}
+
+    # Υπολογισμός διελεύσεων για τη 15η ημέρα του επιλεγμένου μήνα
+    transit_raw_positions = calculate_natal_positions(year, month, 15, 12.0)
+    clean_transits = {planet: _safe_extract_deg(pos) for planet, pos in transit_raw_positions.items()}
+
+    transits_found = []
+
+    # Σημαντικές όψεις διελεύσεων
+    aspect_targets = {
+        0.0: "Σύνοδος / Conjunction",
+        60.0: "Εξάγωνο / Sextile",
+        90.0: "Τετράγωνο / Square",
+        120.0: "Τρίγωνο / Trine",
+        180.0: "Αντίθεση / Opposition"
+    }
+
+    # Έλεγχος αργών & μέσων πλανητών
+    outer_planets = ["Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"]
+
+    for t_planet in outer_planets:
+        if t_planet not in clean_transits:
+            continue
+        
+        t_deg = clean_transits[t_planet]
+
+        for n_planet, n_deg in clean_natal.items():
             diff = abs(t_deg - n_deg) % 360.0
-            if diff > 180:
+            if diff > 180.0:
                 diff = 360.0 - diff
-                
-            # Αυστηρότερο Orb: 5° για αργούς πλανήτες (Macro), 2° για γρήγορους (Trigger)
-            max_orb = 5.0 if t_planet in outer_planets else 2.0
-            
-            for aspect_name, data in ASPECT_TYPES.items():
-                target_angle = data["angle"]
-                if abs(diff - target_angle) <= max_orb:
-                    transits.append({
+
+            for target_angle, aspect_name in aspect_targets.items():
+                # Ανοχή (Orb) 3.0 μοίρες για τις μηνιαίες διελεύσεις
+                if abs(diff - target_angle) <= 3.0:
+                    transits_found.append({
                         "transit_planet": t_planet,
-                        "natal_planet": n_planet,
                         "aspect": aspect_name,
-                        "orb": round(abs(diff - target_angle), 2),
-                        "type": "Macro" if t_planet in outer_planets else "Trigger"
+                        "natal_planet": n_planet,
+                        "orb": round(abs(diff - target_angle), 2)
                     })
-    return transits
+
+    return transits_found            
+            
