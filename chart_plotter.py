@@ -226,3 +226,78 @@ def plot_biwheel_chart(ax, pos1: dict, pos2: dict):
     ax.set_rticks([])
     ax.set_xticks([])
     ax.grid(False)
+
+def create_interactive_synastry_plotly(pos1, pos2, name1="Άτομο 1", name2="Άτομο 2", lang="el"):
+    """
+    Δημιουργεί διαδραστικό Plotly Bi-Wheel Chart για τη Συναστρία.
+    - Εξωτερικός κύκλος: Άτομο 1 (Ροζ)
+    - Εσωτερικός κύκλος: Άτομο 2 (Πράσινο)
+    """
+    import plotly.graph_objects as go
+    import numpy as np
+
+    fig = go.Figure()
+
+    # 1. Κύκλος Διαχωρισμού
+    theta = np.linspace(0, 360, 200)
+    fig.add_trace(go.Scatterpolar(
+        r=[1.0] * len(theta),
+        theta=theta,
+        mode='lines',
+        line=dict(color='#334155', width=2),
+        hoverinfo='none',
+        showlegend=False
+    ))
+
+    # 2. Πλανήτες Ατόμου 1 (Εξωτερικός Κύκλος - r=1.1)
+    for planet, val in pos1.items():
+        deg = val.get("deg", float(val)) if isinstance(val, dict) else float(val)
+        p_name = PLANET_TRANSLATIONS.get(planet, {}).get(lang, planet) if 'PLANET_TRANSLATIONS' in globals() else planet
+        
+        fig.add_trace(go.Scatterpolar(
+            r=[1.15],
+            theta=[deg],
+            mode='markers+text',
+            marker=dict(size=12, color='#EC4899', symbol='circle'),
+            text=[planet[:2]],
+            textposition="top center",
+            name=f"{name1}: {p_name}",
+            hovertemplate=f"<b>{name1}</b><br>Πλανήτης: {p_name}<br>Μοίρα: {deg:.2f}°<extra></extra>"
+        ))
+
+    # 3. Πλανήτες Ατόμου 2 (Εσωτερικός Κύκλος - r=0.85)
+    for planet, val in pos2.items():
+        deg = val.get("deg", float(val)) if isinstance(val, dict) else float(val)
+        p_name = PLANET_TRANSLATIONS.get(planet, {}).get(lang, planet) if 'PLANET_TRANSLATIONS' in globals() else planet
+        
+        fig.add_trace(go.Scatterpolar(
+            r=[0.85],
+            theta=[deg],
+            mode='markers+text',
+            marker=dict(size=12, color='#10B981', symbol='circle'),
+            text=[planet[:2]],
+            textposition="bottom center",
+            name=f"{name2}: {p_name}",
+            hovertemplate=f"<b>{name2}</b><br>Πλανήτης: {p_name}<br>Μοίρα: {deg:.2f}°<extra></extra>"
+        ))
+
+    fig.update_layout(
+        polar=dict(
+            bgcolor='#0E1117',
+            radialaxis=dict(visible=False, range=[0, 1.3]),
+            angularaxis=dict(
+                direction="counterclockwise",
+                period=360,
+                rotation=0,
+                linecolor="#334155",
+                gridcolor="#1E293B"
+            )
+        ),
+        paper_bgcolor='#0E1117',
+        plot_bgcolor='#0E1117',
+        margin=dict(l=20, r=20, t=20, b=20),
+        height=450,
+        showlegend=False
+    )
+
+    return fig
