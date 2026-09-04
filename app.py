@@ -326,7 +326,7 @@ if menu_choice.startswith("1."):
     
     with col1:
         st.subheader("🪐 Διαδραστικός Χάρτης (Hover/Touch) / Interactive Chart")
-        plotly_fig = create_interactive_natal_plotly(raw_natal_pos, houses)
+        plotly_fig = create_interactive_natal_plotly(raw_natal_pos, houses, lang=lang)
         st.plotly_chart(plotly_fig, use_container_width=True)
         
     with col2:
