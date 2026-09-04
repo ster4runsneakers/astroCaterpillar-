@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Hybrid BYOK & Admin Key Protection)
+# app.py - AstroCaterpillar Micro-App (Unified DeepSeek + Gemini Engine)
 import datetime
 import json
 import sqlite3
@@ -75,7 +75,7 @@ ZODIAC_GUIDE = {
     "Τοξότης / Sagittarius": "Πυρ - Μεταβλητό | Αισιοδοξία, επέκταση, αναζήτηση αλήθειας, ελευθερία, σοφία.",
     "Αιγόκερως / Capricorn": "Γη - Παρορμητικό | Πειθαρχία, φιλοδοξία, δομή, ευθύνη, μακροπρόθεσμος σχεδιασμός.",
     "Υδροχόος / Aquarius": "Αέρας - Σταθερό | Ανεξαρτησία, πρωτοπορία, συλλογικότητα, αυθεντικότητα, οραματισμός.",
-    "Ιχθύες / Pisces": "Νερό - Μεταβλητό | Ενσυναίσθηση, φαντασία, πνευματικότητα, συμπόνια, υπέρβαση."
+    "Ιχθύες / Pisces": "Νερό - Μεταβλητό | Ενσυναίσθηση, φαντασία, πνευματική, συμπόνια, υπέρβαση."
 }
 
 RETROGRADE_GUIDE = {
@@ -97,7 +97,7 @@ ELEMENTS_GUIDE = {
 }
 
 MODALITIES_GUIDE = {
-    "⚡ Παρορμητικά / Cardinal": "Η Αρχή & η Πρωτοβουλία. Ανοίγουν νέους δρόμους, ξεκινούν έργα, θέτουν στόχοι.",
+    "⚡ Παρορμητικά / Cardinal": "Η Αρχή & η Πρωτοβουλία. Ανοίγουν νέους δρόμους, ξεκινούν έργα, θέτουν στόχους.",
     "🏛️ Σταθερά / Fixed": "Η Διατήρηση & η Θεμελίωση. Συγκεντρώνουν, σταθεροποιούν και προστατεύουν με αφοσίωση.",
     "🌀 Μεταβλητά / Mutable": "Η Προσαρμογή & η Μετάβαση. Προσαρμόζονται, βελτιώνουν, διορθώνουν και εξελίσσουν."
 }
@@ -221,12 +221,12 @@ st.sidebar.title("🐛 AstroCaterpillar")
 lang_choice = st.sidebar.selectbox("🌐 Γλώσσα / Language", ["Ελληνικά", "English"])
 lang = "el" if lang_choice == "Ελληνικά" else "en"
 
-# --- USER API KEY INPUT (BYOK) ---
+# --- BYOK KEY INPUT (OPTIONAL FOR GUESTS) ---
 st.sidebar.markdown("---")
-user_gemini_key = st.sidebar.text_input(
-    "🔑 Gemini API Key (Προαιρετικό):",
+user_api_key = st.sidebar.text_input(
+    "🔑 AI API Key (Προαιρετικό):",
     type="password",
-    help="Βάλτε το δικό σας δωρεάν API Key από το Google AI Studio. Αν είστε Admin, χρησιμοποιείται το Master Key."
+    help="Βάλτε το δικό σας API Key (DeepSeek ή Gemini). Αν είστε Admin, χρησιμοποιούνται αυτόματα τα Master Keys."
 )
 
 # --- PROFILE SOURCE CONTROLLER ---
@@ -398,7 +398,7 @@ if menu_choice.startswith("1."):
                 f"Elements: {elements_pct}, Modalities: {modalities_pct}",
                 str(aspects),
                 lang=lang,
-                user_api_key=user_gemini_key
+                user_api_key=user_api_key
             )
             st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
 
@@ -427,7 +427,7 @@ if menu_choice.startswith("1."):
             with st.spinner("Σκέφτεται... / Thinking..."):
                 history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["natal"]])
                 full_prompt = f"Αρχική Ανάλυση:\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_gemini_key)
+                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_api_key)
                 st.session_state.chat_history["natal"].append({"role": "assistant", "content": ans})
                 st.rerun()
 
@@ -459,7 +459,7 @@ elif menu_choice.startswith("2."):
         with st.spinner("Υπολογισμός Μακρο-Κύκλων... / Calculating Macro Cycles..."):
             natal_degrees = {p: extract_deg(v) for p, v in prof_data["positions"].items()}
             m_transits = calculate_monthly_transits(natal_degrees, sel_year, sel_month_num)
-            report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang, user_api_key=user_gemini_key)
+            report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang, user_api_key=user_api_key)
             st.session_state[f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"] = report
 
     t_cache_key = f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"
@@ -487,7 +487,7 @@ elif menu_choice.startswith("2."):
             with st.spinner("Σκέφτεται... / Thinking..."):
                 history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["transits"]])
                 full_prompt = f"Αρχική Ανάλυση Διελεύσεων ({timeframe_label}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_gemini_key)
+                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_api_key)
                 st.session_state.chat_history["transits"].append({"role": "assistant", "content": ans})
                 st.rerun()
 
@@ -511,8 +511,8 @@ elif menu_choice.startswith("3."):
                 plot_biwheel_chart(ax, pos1, pos2)
                 st.pyplot(fig)
                 
-                with st.spinner("Ανάλυση... / Analyzing..."):
-                    report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang, user_api_key=user_gemini_key)
+                with st.spinner("Ανάλυση Συναστρίας... / Analyzing..."):
+                    report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang, user_api_key=user_api_key)
                     st.session_state[f"synastry_ai_{p1}_{p2}_{lang}"] = report
 
             s_cache_key = f"synastry_ai_{p1}_{p2}_{lang}"
@@ -556,7 +556,7 @@ elif menu_choice.startswith("3."):
                     with st.spinner("Σκέφτεται... / Thinking..."):
                         history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["synastry"]])
                         full_prompt = f"Αρχική Ανάλυση Συναστρίας ({p1} & {p2}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                        ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_gemini_key)
+                        ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_api_key)
                         st.session_state.chat_history["synastry"].append({"role": "assistant", "content": ans})
                         st.rerun()
 
