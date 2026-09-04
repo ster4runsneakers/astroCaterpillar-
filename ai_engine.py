@@ -1,11 +1,11 @@
-# ai_engine.py - AstroCaterpillar AI Engine (With Smart Fallback Mechanism)
+# ai_engine.py - AstroCaterpillar AI Engine (With Updated Active Model Fallback)
 import os
 import streamlit as st
 from google import genai
 
-# Λίστα μοντέλων με σειρά προτεραιότητας
+# Ενεργά μοντέλα SDK
 PRIMARY_MODEL = 'gemini-2.5-flash'
-FALLBACK_MODEL = 'gemini-1.5-flash'
+FALLBACK_MODEL = 'gemini-2.5-flash-lite'
 
 def _get_client():
     api_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
@@ -16,7 +16,7 @@ def _get_client():
 def _generate_with_fallback(client, prompt):
     """
     Δοκιμάζει πρώτα το Primary Model (2.5-flash). 
-    Αν αποτύχει λόγω Quota/Rate Limit (429), περνάει αυτόματα στο Fallback Model (1.5-flash).
+    Αν αποτύχει λόγω Quota (429), περνάει αυτόματα στο Fallback Model (2.5-flash-lite).
     """
     try:
         # 1η Προσπάθεια: Gemini 2.5 Flash
@@ -26,19 +26,20 @@ def _generate_with_fallback(client, prompt):
         )
         return response.text
     except Exception as e:
+        err_str = str(e)
         # Αν το σφάλμα αφορά όριο αιτημάτων (429 / Resource Exhausted)
-        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
             try:
-                # 2η Προσπάθεια: Αυτόματη μετάβαση στο Gemini 1.5 Flash
+                # 2η Προσπάθεια: Μετάβαση στο Gemini 2.5 Flash Lite
                 response = client.models.generate_content(
                     model=FALLBACK_MODEL,
                     contents=prompt,
                 )
                 return response.text
             except Exception as fallback_err:
-                return f"⚠️ Το ημερήσιο όριο εξαντλήθηκε και στα δύο μοντέλα. Παρακαλώ δοκιμάστε ξανά σε λίγο: {str(fallback_err)}"
+                return "⚠️ Το ημερήσιο όριο εξαντλήθηκε προσωρινά. Παρακαλώ δοκιμάστε ξανά σε λίγα λεπτά."
         else:
-            return f"⚠️ Σφάλμα κατά την παραγωγή της ανάλυσης: {str(e)}"
+            return f"⚠️ Σφάλμα κατά την παραγωγή της ανάλυσης: {err_str}"
 
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el"):
     client = _get_client()
