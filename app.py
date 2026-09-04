@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Unified DeepSeek + Gemini Engine)
+# app.py - AstroCaterpillar Micro-App (Includes Persistent Multi-turn Chat for Transits & Synastry)
 import datetime
 import json
 import sqlite3
@@ -75,7 +75,7 @@ ZODIAC_GUIDE = {
     "Τοξότης / Sagittarius": "Πυρ - Μεταβλητό | Αισιοδοξία, επέκταση, αναζήτηση αλήθειας, ελευθερία, σοφία.",
     "Αιγόκερως / Capricorn": "Γη - Παρορμητικό | Πειθαρχία, φιλοδοξία, δομή, ευθύνη, μακροπρόθεσμος σχεδιασμός.",
     "Υδροχόος / Aquarius": "Αέρας - Σταθερό | Ανεξαρτησία, πρωτοπορία, συλλογικότητα, αυθεντικότητα, οραματισμός.",
-    "Ιχθύες / Pisces": "Νερό - Μεταβλητό | Ενσυναίσθηση, φαντασία, πνευματική, συμπόνια, υπέρβαση."
+    "Ιχθύες / Pisces": "Νερό - Μεταβλητό | Ενσυναίσθηση, φαντασία, πνευματικότητα, συμπόνια, υπέρβαση."
 }
 
 RETROGRADE_GUIDE = {
@@ -213,6 +213,7 @@ if "is_admin" not in st.session_state:
 if "guest_profiles" not in st.session_state:
     st.session_state.guest_profiles = {}
 
+# Chat memory stores per category
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = {"natal": [], "transits": [], "synastry": []}
 
@@ -220,14 +221,6 @@ if "chat_history" not in st.session_state:
 st.sidebar.title("🐛 AstroCaterpillar")
 lang_choice = st.sidebar.selectbox("🌐 Γλώσσα / Language", ["Ελληνικά", "English"])
 lang = "el" if lang_choice == "Ελληνικά" else "en"
-
-# --- BYOK KEY INPUT (OPTIONAL FOR GUESTS) ---
-st.sidebar.markdown("---")
-user_api_key = st.sidebar.text_input(
-    "🔑 AI API Key (Προαιρετικό):",
-    type="password",
-    help="Βάλτε το δικό σας API Key (DeepSeek ή Gemini). Αν είστε Admin, χρησιμοποιούνται αυτόματα τα Master Keys."
-)
 
 # --- PROFILE SOURCE CONTROLLER ---
 if st.session_state.is_admin:
@@ -397,8 +390,7 @@ if menu_choice.startswith("1."):
                 str(cz_data),
                 f"Elements: {elements_pct}, Modalities: {modalities_pct}",
                 str(aspects),
-                lang=lang,
-                user_api_key=user_api_key
+                lang=lang
             )
             st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
 
@@ -417,6 +409,7 @@ if menu_choice.startswith("1."):
         st.markdown("---")
         st.subheader("💬 Chat με τον AstroCaterpillar (Γενέθλιος Χάρτης)")
         
+        # Display history
         for msg in st.session_state.chat_history["natal"]:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
@@ -425,9 +418,10 @@ if menu_choice.startswith("1."):
         if user_q:
             st.session_state.chat_history["natal"].append({"role": "user", "content": user_q})
             with st.spinner("Σκέφτεται... / Thinking..."):
+                # Pass whole conversation context
                 history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["natal"]])
                 full_prompt = f"Αρχική Ανάλυση:\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_api_key)
+                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
                 st.session_state.chat_history["natal"].append({"role": "assistant", "content": ans})
                 st.rerun()
 
@@ -459,7 +453,7 @@ elif menu_choice.startswith("2."):
         with st.spinner("Υπολογισμός Μακρο-Κύκλων... / Calculating Macro Cycles..."):
             natal_degrees = {p: extract_deg(v) for p, v in prof_data["positions"].items()}
             m_transits = calculate_monthly_transits(natal_degrees, sel_year, sel_month_num)
-            report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang, user_api_key=user_api_key)
+            report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang)
             st.session_state[f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"] = report
 
     t_cache_key = f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"
@@ -487,7 +481,7 @@ elif menu_choice.startswith("2."):
             with st.spinner("Σκέφτεται... / Thinking..."):
                 history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["transits"]])
                 full_prompt = f"Αρχική Ανάλυση Διελεύσεων ({timeframe_label}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_api_key)
+                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
                 st.session_state.chat_history["transits"].append({"role": "assistant", "content": ans})
                 st.rerun()
 
@@ -511,8 +505,8 @@ elif menu_choice.startswith("3."):
                 plot_biwheel_chart(ax, pos1, pos2)
                 st.pyplot(fig)
                 
-                with st.spinner("Ανάλυση Συναστρίας... / Analyzing..."):
-                    report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang, user_api_key=user_api_key)
+                with st.spinner("Ανάλυση... / Analyzing..."):
+                    report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang)
                     st.session_state[f"synastry_ai_{p1}_{p2}_{lang}"] = report
 
             s_cache_key = f"synastry_ai_{p1}_{p2}_{lang}"
@@ -556,7 +550,7 @@ elif menu_choice.startswith("3."):
                     with st.spinner("Σκέφτεται... / Thinking..."):
                         history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["synastry"]])
                         full_prompt = f"Αρχική Ανάλυση Συναστρίας ({p1} & {p2}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                        ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_api_key)
+                        ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
                         st.session_state.chat_history["synastry"].append({"role": "assistant", "content": ans})
                         st.rerun()
 
