@@ -1,58 +1,81 @@
-# ephemeris_engine.py
+# ephemeris_engine.py - AstroCaterpillar Ephemeris Engine with Retrograde Detection
 import datetime
+import math
 
-PLANET_SPEEDS = {
-    "Sun": 0.9856,
-    "Moon": 13.1763,
-    "Mercury": 1.2000,
-    "Venus": 1.6000,
-    "Mars": 0.5240,
-    "Jupiter": 0.0831,
-    "Saturn": 0.0335,
-    "Uranus": 0.0117,
-    "Neptune": 0.0060,
-    "Pluto": 0.0040
-}
+PLANETS = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"]
 
-BASE_POSITIONS = {
-    "Sun": 280.46,
-    "Moon": 218.32,
-    "Mercury": 252.25,
-    "Venus": 181.98,
-    "Mars": 355.43,
-    "Jupiter": 34.35,
-    "Saturn": 50.08,
-    "Uranus": 314.05,
-    "Neptune": 304.35,
-    "Pluto": 238.92
-}
+def julian_day(year: int, month: int, day: int, hour_decimal: float) -> float:
+    if month <= 2:
+        year -= 1
+        month += 12
+    A = math.floor(year / 100)
+    B = 2 - A + math.floor(A / 4)
+    jd = math.floor(365.25 * (year + 4716)) + math.floor(30.6001 * (month + 1)) + day + B - 1524.5
+    jd += hour_decimal / 24.0
+    return jd
 
-def _days_since_j2000(year: int, month: int, day: int, hour_decimal: float) -> float:
-    d = datetime.date(year, month, day)
-    epoch = datetime.date(2000, 1, 1)
-    diff_days = (d - epoch).days
-    return diff_days + (hour_decimal - 12.0) / 24.0
+def get_planet_raw_deg(planet_name: str, T: float) -> float:
+    if planet_name == "Sun":
+        L0 = 280.46646 + 36000.76983 * T
+        M = 357.52911 + 35999.05029 * T
+        C = (1.914602 - 0.004817 * T) * math.sin(math.radians(M)) + (0.019993 - 0.000101 * T) * math.sin(math.radians(2 * M))
+        return (L0 + C) % 360.0
+
+    elif planet_name == "Moon":
+        L = 218.316 + 13.176396 * (T * 36525)
+        M = 134.963 + 13.064993 * (T * 36525)
+        F = 93.272 + 13.229350 * (T * 36525)
+        deg = L + 6.289 * math.sin(math.radians(M)) - 1.274 * math.sin(math.radians(M - 2 * (L - 280.466))) + 0.658 * math.sin(math.radians(2 * (L - 280.466)))
+        return deg % 360.0
+
+    speeds = {
+        "Mercury": 4.15201, "Venus": 1.62549, "Mars": 0.52402,
+        "Jupiter": 0.08308, "Saturn": 0.03346, "Uranus": 0.01173,
+        "Neptune": 0.00598, "Pluto": 0.00396
+    }
+    base_deg = {
+        "Mercury": 252.25, "Venus": 181.98, "Mars": 355.45,
+        "Jupiter": 34.40, "Saturn": 50.08, "Uranus": 314.05,
+        "Neptune": 304.35, "Pluto": 238.92
+    }
+    days = T * 36525.0
+    sp = speeds.get(planet_name, 0.1)
+    b = base_deg.get(planet_name, 0.0)
+    
+    # Προσθήκη ημιτονοειδούς διακύμανσης για προσομοίωση φαινόμενης ανάδρομης κίνησης
+    retro_phase = math.sin(math.radians(days * sp * 0.5)) * 6.0
+    deg = b + days * sp + retro_phase
+    return deg % 360.0
 
 def calculate_natal_positions(year: int, month: int, day: int, hour_decimal: float) -> dict:
-    """Υπολογίζει τις μοίρες των πλανητών (0° - 360°)."""
-    days = _days_since_j2000(year, month, day, hour_decimal)
+    """Υπολογίζει τις μοίρες και αν ο πλανήτης είναι ανάδρομος (is_retrograde)."""
+    jd = julian_day(year, month, day, hour_decimal)
+    T = (jd - 2451545.0) / 36525.0
+    T_next = T + (1.0 / 36525.0) # 1 ημέρα μετά για έλεγχο ταχύτητας
+    
     positions = {}
-    for planet, speed in PLANET_SPEEDS.items():
-        base = BASE_POSITIONS[planet]
-        deg = (base + speed * days) % 360.0
-        if deg < 0:
-            deg += 360.0
-        positions[planet] = round(deg, 2)
+    for p in PLANETS:
+        deg = get_planet_raw_deg(p, T)
+        deg_next = get_planet_raw_deg(p, T_next)
+        
+        # Αν η μοίρα μειώνεται, ο πλανήτης είναι ανάδρομος
+        diff = (deg_next - deg) % 360.0
+        is_retro = True if (diff > 180.0 or diff < 0) and p not in ["Sun", "Moon"] else False
+        
+        positions[p] = {
+            "deg": round(deg, 2),
+            "is_retro": is_retro
+        }
     return positions
 
 def calculate_houses(year: int, month: int, day: int, hour_decimal: float, lat: float, lon: float) -> dict:
-    """Υπολογίζει τις αιχμές των 12 Οίκων (Equal House System)."""
-    days = _days_since_j2000(year, month, day, hour_decimal)
-    lst = (100.46 + 0.985647 * days + lon + hour_decimal * 15.0) % 360.0
-    ascendant = (lst + 90.0) % 360.0
+    jd = julian_day(year, month, day, hour_decimal)
+    T = (jd - 2451545.0) / 36525.0
+    GMST = (280.46061837 + 360.98564736629 * (jd - 2451545.0)) % 360.0
+    LST = (GMST + lon) % 360.0
+    
     houses = {}
     for i in range(1, 13):
-        house_deg = (ascendant + (i - 1) * 30.0) % 360.0
-        houses[f"House_{i}"] = round(house_deg, 2)
+        h_deg = (LST + (i - 1) * 30.0) % 360.0
+        houses[f"House_{i}"] = round(h_deg, 2)
     return houses
-  
