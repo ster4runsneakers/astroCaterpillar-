@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Protected Admin Database)
+# app.py - AstroCaterpillar Micro-App (Protected Admin Database & Database Backup)
 import datetime
 import json
 import sqlite3
@@ -88,6 +88,25 @@ def delete_profile_from_db(name):
     c.execute('DELETE FROM profiles WHERE name = ?', (name,))
     conn.commit()
     conn.close()
+
+def export_db_as_json():
+    """Εξάγει όλα τα προφίλ σε μορφή JSON string."""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('SELECT name, date_str, time_str, city, positions_json FROM profiles')
+    rows = c.fetchall()
+    conn.close()
+    
+    data = []
+    for r in rows:
+        data.append({
+            "name": r[0],
+            "date": r[1],
+            "time": r[2],
+            "city": r[3],
+            "positions": json.loads(r[4])
+        })
+    return json.dumps(data, indent=2, ensure_ascii=False)
 
 # --- SESSION STATE INITIALIZATION ---
 if "is_admin" not in st.session_state:
@@ -341,7 +360,7 @@ elif menu_choice.startswith("5."):
         if st.button("Σύνδεση ως Admin"):
             if admin_pass == "admin123":
                 st.session_state.is_admin = True
-                st.success("Πρόσβαση εγκρίθηκε! Τώρα βλέπετε τη μόνιμη βάση δεδομένων.")
+                st.success("Πρόσβαση εγκρίθηκε!")
                 st.rerun()
             else:
                 st.error("Λανθασμένος κωδικός πρόσβασης.")
@@ -350,6 +369,34 @@ elif menu_choice.startswith("5."):
         db_profiles = load_profiles_from_db()
         st.write(f"**Μόνιμα Αποθηκευμένα Προφίλ στη Βάση:** {len(db_profiles)}")
         
+        st.markdown("---")
+        st.subheader("📦 Εξαγωγή & Backup Βάσης Δεδομένων")
+        
+        col_dl1, col_dl2 = st.columns(2)
+        
+        with col_dl1:
+            json_data = export_db_as_json()
+            st.download_button(
+                label="📥 Download Database (JSON)",
+                data=json_data,
+                file_name=f"astro_profiles_backup_{datetime.date.today()}.json",
+                mime="application/json"
+            )
+            
+        with col_dl2:
+            try:
+                with open(DB_FILE, "rb") as fp:
+                    db_bytes = fp.read()
+                st.download_button(
+                    label="📥 Download Database (.db)",
+                    data=db_bytes,
+                    file_name="astro_data.db",
+                    mime="application/x-sqlite3"
+                )
+            except Exception as e:
+                st.error("Δεν βρέθηκε το αρχείο βάσης δεδομένων.")
+
+        st.markdown("---")
         col_adm1, col_adm2 = st.columns(2)
         with col_adm1:
             if st.button("🧹 Καθαρισμός AI Cache"):
