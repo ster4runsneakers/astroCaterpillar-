@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Includes Retrograde Indicators & Report Export)
+# app.py - AstroCaterpillar Micro-App (Includes Interactive Plotly Chart & PDF Engine)
 import datetime
 import json
 import sqlite3
@@ -13,7 +13,7 @@ from elements_engine import calculate_elements_and_modalities
 from natal_aspects_engine import calculate_natal_aspects
 from synastry_engine import calculate_synastry_aspects, calculate_monthly_transits
 from chinese_astrology import get_chinese_zodiac
-from chart_plotter import plot_natal_chart, plot_biwheel_chart
+from chart_plotter import plot_natal_chart, plot_biwheel_chart, create_interactive_natal_plotly
 
 from ai_engine import (
     analyze_natal_chart_ai,
@@ -80,7 +80,7 @@ ZODIAC_GUIDE = {
 
 RETROGRADE_GUIDE = {
     "Ερμής / Mercury (R)": "Επανεξέταση επικοινωνίας, συμφωνιών, εγγράφων. Εσωστρέφεια στη σκέψη, πιθανές καθυστερήσεις.",
-    "Αφροδίτη / Venus (R)": "Αναθεώρηση σχεσεων, συναισθηματικών αναγκών και οικονομικών αξιών. Επιστροφή παρελθόντος.",
+    "Αφροδίτη / Venus (R)": "Αναθεώρηση σχέσεων, συναισθηματικών αναγκών και οικονομικών αξιών. Επιστροφή παρελθόντος.",
     "Άρης / Mars (R)": "Εσωτερικευμένη δράση, ανάσχεση παρορμητισμού, επανεξέταση στόχων και διαχείριση θυμού.",
     "Δίας / Jupiter (R)": "Εσωτερική φιλοσοφική ανάπτυξη, επανεξέταση πεποιθήσεων και προσωπικής ηθικής.",
     "Κρόνος / Saturn (R)": "Αναθεώρηση δομών, ορίων και ευθυνών. Εσωτερική πειθαρχία και καρμική ωρίμανση.",
@@ -290,7 +290,6 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
 
 prof_data = saved_profiles.get(selected_profile, {})
 
-# Helper για εξαγωγή μοιρών (συμβατότητα με παλιά DB)
 def extract_deg(val):
     if isinstance(val, dict):
         return val.get("deg", 0.0)
@@ -306,8 +305,6 @@ if menu_choice.startswith("1."):
     city_name_el = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("el", city_key)
     city_name_en = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("en", city_key)
     raw_natal_pos = prof_data["positions"]
-    
-    # Μετατροπή θέσεων σε απλές μοίρες για τα γραφήματα
     natal_pos = {p: extract_deg(v) for p, v in raw_natal_pos.items()}
     
     lat = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("lat", 37.9838)
@@ -328,10 +325,9 @@ if menu_choice.startswith("1."):
     col1, col2 = st.columns([1.1, 0.9])
     
     with col1:
-        st.subheader("🪐 Αστρολογικός Τροχός & Οίκοι / Astrological Wheel & Houses")
-        fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
-        plot_natal_chart(ax, natal_pos, houses)
-        st.pyplot(fig)
+        st.subheader("🪐 Διαδραστικός Χάρτης (Hover/Touch) / Interactive Chart")
+        plotly_fig = create_interactive_natal_plotly(raw_natal_pos, houses)
+        st.plotly_chart(plotly_fig, use_container_width=True)
         
     with col2:
         st.subheader("📊 Βασικοί Δείκτες / Key Indicators")
@@ -378,7 +374,6 @@ if menu_choice.startswith("1."):
         report_text = st.session_state[cache_key]
         st.markdown(report_text)
         
-        # 1. Κουμπί Download AI Report (.txt)
         st.download_button(
             label="📥 Download AI Report (.txt)",
             data=report_text,
