@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App
+# app.py - AstroCaterpillar Micro-App (Protected Admin Database)
 import datetime
 import json
 import sqlite3
@@ -32,7 +32,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- DATABASE SETUP ---
+# --- DATABASE SETUP (ADMIN ONLY) ---
 DB_FILE = "astro_data.db"
 
 def init_db():
@@ -89,14 +89,26 @@ def delete_profile_from_db(name):
     conn.commit()
     conn.close()
 
+# --- SESSION STATE INITIALIZATION ---
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+
+if "guest_profiles" not in st.session_state:
+    st.session_state.guest_profiles = {}
+
 # --- LANGUAGE SELECTOR ---
 st.sidebar.title("🐛 AstroCaterpillar")
 lang_choice = st.sidebar.selectbox("🌐 Γλώσσα / Language", ["Ελληνικά", "English"])
 lang = "el" if lang_choice == "Ελληνικά" else "en"
 
-# --- SIDEBAR & NAVIGATION ---
-saved_profiles = load_profiles_from_db()
+# --- PROFILE SOURCE CONTROLLER ---
+if st.session_state.is_admin:
+    saved_profiles = load_profiles_from_db()
+    st.sidebar.success("🔑 Admin Mode Active" if lang == "el" else "🔑 Admin Mode Active")
+else:
+    saved_profiles = st.session_state.guest_profiles
 
+# --- SIDEBAR & NAVIGATION ---
 t_profiles_header = "👤 Διαχείριση Προφίλ" if lang == "el" else "👤 Profile Management"
 st.sidebar.subheader(t_profiles_header)
 
@@ -108,7 +120,7 @@ selected_profile = st.sidebar.selectbox(
 )
 
 if selected_profile == new_prof_label:
-    exp_title = "➕ Προσθήκη Νέου Προφίλ" if lang == "el" else "➕ Add New Profile"
+    exp_title = "➕ Προσθήκη Προφίλ" if lang == "el" else "➕ Add Profile"
     with st.sidebar.expander(exp_title, expanded=True):
         new_name = st.text_input("Όνομα / Αρχικά:" if lang == "el" else "Name / Initials:")
         new_date = st.date_input(
@@ -128,21 +140,30 @@ if selected_profile == new_prof_label:
             index=city_keys.index("Athens") if "Athens" in city_keys else 0
         )
         
-        btn_save = "💾 Αποθήκευση Προφίλ" if lang == "el" else "💾 Save Profile"
+        btn_save = "💾 Υπολογισμός Χάρτη" if lang == "el" else "💾 Calculate Chart"
         if st.button(btn_save):
             if new_name.strip():
                 hour_decimal = new_time.hour + (new_time.minute / 60.0)
                 pos = calculate_natal_positions(new_date.year, new_date.month, new_date.day, hour_decimal)
-                save_profile_to_db(new_name.strip(), new_date, new_time, selected_city_key, pos)
+                
+                if st.session_state.is_admin:
+                    save_profile_to_db(new_name.strip(), new_date, new_time, selected_city_key, pos)
+                else:
+                    st.session_state.guest_profiles[new_name.strip()] = {
+                        "date": new_date, "time": new_time, "city": selected_city_key, "positions": pos
+                    }
                 st.success("OK!")
                 st.rerun()
             else:
                 st.error("Παρακαλώ εισάγετε όνομα." if lang == "el" else "Please enter a name.")
 else:
     st.sidebar.info(f"**{selected_profile}**")
-    btn_del = "🗑️ Διαγραφή Προφίλ" if lang == "el" else "🗑️ Delete Profile"
+    btn_del = "🗑️ Αφαίρεση Προφίλ" if lang == "el" else "🗑️ Remove Profile"
     if st.sidebar.button(btn_del):
-        delete_profile_from_db(selected_profile)
+        if st.session_state.is_admin:
+            delete_profile_from_db(selected_profile)
+        else:
+            del st.session_state.guest_profiles[selected_profile]
         st.rerun()
 
 st.sidebar.markdown("---")
@@ -158,7 +179,7 @@ menu_choice = st.sidebar.radio("Πλοήγηση:" if lang == "el" else "Navigat
 
 # --- MAIN CONTROLLER ---
 if selected_profile == new_prof_label and not menu_choice.startswith("5."):
-    msg = "👈 Παρακαλώ επιλέξτε ή δημιουργήστε ένα προφίλ από τη sidebar." if lang == "el" else "👈 Please select or create a profile from the sidebar."
+    msg = "👈 Παρακαλώ εισάγετε τα στοιχεία σας στη sidebar για να δημιουργηθεί ο χάρτης σας." if lang == "el" else "👈 Please enter your details in the sidebar to generate your chart."
     st.warning(msg)
     st.stop()
 
@@ -245,7 +266,7 @@ elif menu_choice.startswith("3."):
     st.header("💞 Συναστρία" if lang == "el" else "💞 Synastry")
     
     if len(profile_names) < 2:
-        st.warning("Απαιτούνται τουλάχιστον 2 προφίλ στη βάση." if lang == "el" else "At least 2 profiles are required.")
+        st.warning("Απαιτούνται τουλάχιστον 2 δημιουργημένα προφίλ στη sidebar." if lang == "el" else "At least 2 profiles in the sidebar are required.")
     else:
         p1 = st.selectbox("Πρώτο Άτομο:" if lang == "el" else "Person 1:", profile_names, index=0)
         p2 = st.selectbox("Δεύτερο Άτομο:" if lang == "el" else "Person 2:", profile_names, index=1 if len(profile_names) > 1 else 0)
@@ -314,14 +335,27 @@ elif menu_choice.startswith("4."):
 # --- TAB 5: ADMIN PANEL ---
 elif menu_choice.startswith("5."):
     st.header("⚙️ Admin Panel")
-    admin_pass = st.text_input("Κωδικός Πρόσβασης / Admin Password:", type="password")
     
-    if admin_pass == "admin123":
-        st.success("Πρόσβαση εγκρίθηκε!")
-        st.write(f"**Συνολικά Αποθηκευμένα Προφίλ:** {len(saved_profiles)}")
+    if not st.session_state.is_admin:
+        admin_pass = st.text_input("Κωδικός Πρόσβασης / Admin Password:", type="password")
+        if st.button("Σύνδεση ως Admin"):
+            if admin_pass == "admin123":
+                st.session_state.is_admin = True
+                st.success("Πρόσβαση εγκρίθηκε! Τώρα βλέπετε τη μόνιμη βάση δεδομένων.")
+                st.rerun()
+            else:
+                st.error("Λανθασμένος κωδικός πρόσβασης.")
+    else:
+        st.success("Είστε συνδεδεμένος ως Admin!")
+        db_profiles = load_profiles_from_db()
+        st.write(f"**Μόνιμα Αποθηκευμένα Προφίλ στη Βάση:** {len(db_profiles)}")
         
-        if st.button("🧹 Καθαρισμός AI Cache (Clear Cache)"):
-            clear_ai_cache()
-            st.success("Η AI Cache καθαρίστηκε επιτυχώς!")
-    elif admin_pass:
-        st.error("Λανθασμένος κωδικός πρόσβασης.")
+        col_adm1, col_adm2 = st.columns(2)
+        with col_adm1:
+            if st.button("🧹 Καθαρισμός AI Cache"):
+                clear_ai_cache()
+                st.success("Η AI Cache καθαρίστηκε!")
+        with col_adm2:
+            if st.button("🚪 Αποσύνδεση Admin (Logout)"):
+                st.session_state.is_admin = False
+                st.rerun()
