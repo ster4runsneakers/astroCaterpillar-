@@ -502,13 +502,13 @@ elif menu_choice.startswith("3."):
                 syn_aspects = calculate_synastry_aspects(pos1, pos2)
                 
                 # Δημιουργία 3 στηλών για να κεντράρουμε και να περιορίσουμε το γράφημα
-col_left, col_chart, col_right = st.columns([1, 2, 1])
+                col_left, col_chart, col_right = st.columns([1, 2, 1])
 
-with col_chart:
-    fig, ax = plt.subplots(figsize=(4, 4), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
-    plot_biwheel_chart(ax, pos1, pos2)
-    fig.tight_layout()
-    st.pyplot(fig, use_container_width=False)
+                with col_chart:
+                    fig, ax = plt.subplots(figsize=(4, 4), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
+                    plot_biwheel_chart(ax, pos1, pos2)
+                    fig.tight_layout()
+                    st.pyplot(fig, use_container_width=False)
                 
                 with st.spinner("Ανάλυση... / Analyzing..."):
                     report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang)
