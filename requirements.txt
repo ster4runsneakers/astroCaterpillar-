@@ -1,6 +1,7 @@
 streamlit
 matplotlib
 numpy
+plotly
 google-genai
 requests
 weasyprint
