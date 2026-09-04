@@ -1,4 +1,4 @@
-# ai_engine.py - AstroCaterpillar Unified Engine (Free OpenRouter Models + Gemini)
+# ai_engine.py - AstroCaterpillar Unified Engine (Updated Active Free Slugs & Gemini 2.5)
 import os
 import streamlit as st
 from google import genai
@@ -36,17 +36,16 @@ def _get_gemini_client(user_api_key=""):
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
     last_errors = []
 
-    # 1η Προσπάθεια: OpenRouter με ΔΩΡΕΑΝ Μοντέλα (Free Tier Models)
+    # 1η Προσπάθεια: OpenRouter με ΕΝΕΡΓΑ ΔΩΡΕΑΝ ΜΟΝΤΕΛΑ
     or_client = _get_openrouter_client(user_api_key)
     if or_client:
-        # Λίστα εντελώς δωρεάν μοντέλων στο OpenRouter
-        free_or_models = [
-            "google/gemini-2.0-flash-exp:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "deepseek/deepseek-r1:free"
+        active_free_or_models = [
+            "google/gemini-2.5-flash:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "mistralai/mistral-7b-instruct:free"
         ]
         
-        for or_model in free_or_models:
+        for or_model in active_free_or_models:
             try:
                 response = or_client.chat.completions.create(
                     model=or_model,
@@ -66,19 +65,19 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
                 last_errors.append(f"OpenRouter ({or_model}): {str(e)}")
                 continue
 
-    # 2η Προσπάθεια: Gemini SDK Direct
+    # 2η Προσπάθεια: Gemini SDK Direct (gemini-2.5-flash)
     gem_client = _get_gemini_client(user_api_key)
     if gem_client:
-        models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest']
         full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
-        for m_name in models_to_try:
-            try:
-                resp = gem_client.models.generate_content(model=m_name, contents=full_prompt)
-                if resp and resp.text:
-                    return resp.text
-            except Exception as e:
-                last_errors.append(f"Gemini ({m_name}): {str(e)}")
-                continue
+        try:
+            resp = gem_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=full_prompt
+            )
+            if resp and resp.text:
+                return resp.text
+        except Exception as e:
+            last_errors.append(f"Gemini (gemini-2.5-flash): {str(e)}")
 
     # Αν αποτύχουν όλα
     err_msg = " | ".join(last_errors) if last_errors else "Δεν βρέθηκαν έγκυρα API Keys."
@@ -86,7 +85,7 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
         "⚠️ Εξαντλήθηκαν προσωρινά τα ημερήσια όρια αιτημάτων.\n\n"
         "**Λύσεις:**\n"
         "1. Εισάγετε ένα δικό σας Gemini API Key στη Sidebar από το [Google AI Studio](https://aistudio.google.com/).\n"
-        "2. Δοκιμάστε ξανά σε λίγα λεπτά.\n\n"
+        "2. Περιμένετε 30 δευτερόλεπτα και δοκιμάστε ξανά.\n\n"
         f"*(Τεχνική λεπτομέρεια: {err_msg})*"
     )
 
