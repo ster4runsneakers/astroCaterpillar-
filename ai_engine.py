@@ -1,4 +1,4 @@
-# ai_engine.py - AstroCaterpillar High-Precision Engine
+# ai_engine.py - AstroCaterpillar Stable Engine (Robust Quota & Free OpenRouter Slugs)
 import os
 import streamlit as st
 from google import genai
@@ -8,8 +8,8 @@ SYSTEM_PROMPT = (
     "Είσαι ο Caterpillar – ένας αναλυτής αστρολογίας που λειτουργεί ως peer, μιλάει με την αλήθεια των αριθμών και των γεγονότων. "
     "Ο τόνος σου είναι αυστηρά επαγγελματικός, αναλυτικός, δεδομενοκεντρικός και ουδέτερος. "
     "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι παραμορφωμένες λέξεις, τα αγγλικά terms ανακατεμένα με ελληνικά και η απλή επανάληψη των μοιρών. "
-    "ΟΦΕΙΛΕΙΣ να συνθέτεις τα δεδομένα σε στρατηγικά συμπεράσματα (π.χ. τι σημαίνει η σύνοδος Άρη-Κρόνου στον Κριό για τη λήψη αποφάσεων). "
-    "Χρησιμοποίησε άπταιστα Ελληνικά με τη σωστή αστρολογική ορολογία (π.χ. Κριός, Ταύρος, Δίδυμοι, Καρκίνος, Λέων, Παρθένος, Ζυγός, Σκορπιός, Τοξότης, Αιγόκερως, Υδροχόος, Ιχθύες)."
+    "ΟΦΕΙΛΕΙΣ να συνθέτεις τα δεδομένα σε στρατηγικά συμπεράσματα. "
+    "Χρησιμοποίησε άπταιστα Ελληνικά με τη σωστή αστρολογική ορολογία."
 )
 
 def _get_openrouter_client(user_api_key=""):
@@ -39,31 +39,36 @@ def _get_gemini_client(user_api_key=""):
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
     last_errors = []
 
-    # 1. Πρώτη επιλογή: Gemini Direct (gemini-2.5-flash) - Το πιο αξιόπιστο στα Ελληνικά
+    # 1. Gemini Direct (Δοκιμή σε πολλαπλά μοντέλα με ανεξάρτητα Quotas)
     gem_client = _get_gemini_client(user_api_key)
     if gem_client:
+        # Δοκιμάζουμε 3 διαφορετικά μοντέλα της Google - αν το 2.5 φτάσει όριο, περνάει στο 2.0
+        gemini_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
         full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
-        try:
-            resp = gem_client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=full_prompt
-            )
-            if resp and resp.text:
-                return resp.text
-        except Exception as e:
-            last_errors.append(f"Gemini 2.5: {str(e)}")
+        
+        for g_model in gemini_models:
+            try:
+                resp = gem_client.models.generate_content(
+                    model=g_model,
+                    contents=full_prompt
+                )
+                if resp and resp.text:
+                    return resp.text
+            except Exception as e:
+                last_errors.append(f"Gemini ({g_model}): {str(e)}")
+                continue
 
-    # 2. Δεύτερη επιλογή: OpenRouter (Μόνο με δοκιμασμένα, σοβαρά μοντέλα)
+    # 2. OpenRouter (Μόνο ΕΝΕΡΓΑ ΔΩΡΕΑΝ slugs που ΔΕΝ απαιτούν credits)
     or_client = _get_openrouter_client(user_api_key)
     if or_client:
-        # Χρησιμοποιούμε μόνο μοντέλα με εξαιρετική υποστήριξη Ελληνικών
-        top_or_models = [
-            "google/gemini-2.5-flash",
-            "deepseek/deepseek-chat",
-            "meta-llama/llama-3.3-70b-instruct:free"
+        verified_free_models = [
+            "google/gemini-2.0-flash-lite-preview-02-05:free",
+            "google/gemini-2.0-pro-exp-02-05:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "openrouter/free"
         ]
         
-        for model_name in top_or_models:
+        for model_name in verified_free_models:
             try:
                 response = or_client.chat.completions.create(
                     model=model_name,
@@ -85,8 +90,8 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
 
     err_msg = " | ".join(last_errors) if last_errors else "Δεν βρέθηκε διαθέσιμη AI μηχανή."
     return (
-        "⚠️ Προσωρινό σφάλμα AI μηχανής.\n\n"
-        "Παρακαλώ βεβαιωθείτε ότι υπάρχει έγκυρο Gemini API Key ή δοκιμάστε ξανά σε λίγο.\n"
+        "⚠️ Εξαντλήθηκαν προσωρινά τα ημερήσια όρια αιτημάτων.\n\n"
+        "**Γρήγορη Λύση:** Εισάγετε ένα δικό σας δωρεάν Gemini API Key στη Sidebar από το [Google AI Studio](https://aistudio.google.com/).\n\n"
         f"*(Τεχνική λεπτομέρεια: {err_msg})*"
     )
 
@@ -103,7 +108,7 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
 
     ΟΔΗΓΙΕΣ ΣΥΝΤΑΞΗΣ:
     1. ΜΗΝ επαναλάβεις απλά τους αριθμούς και τις μοίρες.
-    2. Αναλυσε τη δομή της προσωπικότητας, τα δυνατά σημεία και τις εσωτερικές συγκρούσεις (π.χ. σύνοδος Άρη/Κρόνου).
+    2. Αναλυσε τη δομή της προσωπικότητας, τα δυνατά σημεία και τις εσωτερικές συγκρούσεις.
     3. Δώσε έμφαση στη στρατηγική κατεύθυνση, την καριέρα (10ος οίκος) και τη διαχείριση πόρων.
     4. Γράψε σε άπταιστα Ελληνικά με σωστή ορολογία.
     """
