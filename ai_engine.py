@@ -1,17 +1,5 @@
-# ai_engine.py - AstroCaterpillar Rich Astrological Persona Engine
+# ai_engine.py - AstroCaterpillar Rich Astrological Persona Engine (Dual SDK Support)
 import os
-import google.generativeai as genai
-
-def get_ai_model():
-    """Αναζητά το API Key και αρχικοποιεί το Gemini Model."""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        return None
-    try:
-        genai.configure(api_key=api_key)
-        return genai.GenerativeAIModel('gemini-1.5-flash')
-    except Exception:
-        return None
 
 SYSTEM_PERSONA = """
 Είσαι ο AstroCaterpillar, ένας έμπειρος, διεισδυτικός και γλαφυρός αστρολόγος.
@@ -25,11 +13,36 @@ SYSTEM_PERSONA = """
 5. Διατήρησε την απάντηση στην αιτούμενη γλώσσα (Ελληνικά ή Αγγλικά).
 """
 
+def generate_ai_text(prompt: str) -> str:
+    """Εκτελεί το API call χρησιμοποιώντας είτε το νέο google-genai είτε το παλιό google-generativeai."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return "⚠️ Το GEMINI_API_KEY δεν βρέθηκε στις ρυθμίσεις του Streamlit Cloud (Secrets)."
+
+    # 1. Δοκιμή με το νέο SDK: google-genai
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+        return response.text
+    except Exception:
+        pass
+
+    # 2. Fallback στο παλιό SDK: google-generativeai
+    try:
+        import google.generativeai as genai_old
+        genai_old.configure(api_key=api_key)
+        model = genai_old.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"⚠️ Σφάλμα κατά την παραγωγή της ανάλυσης: {str(e)}"
+
+
 def analyze_natal_chart_ai(name, positions, houses, chinese_data, elements, aspects, lang="el"):
-    model = get_ai_model()
-    if not model:
-        return "⚠️ Το GEMINI_API_KEY δεν βρέθηκε στις ρυθμίσεις του Streamlit Cloud."
-    
     prompt = f"""
     {SYSTEM_PERSONA}
     
@@ -45,18 +58,10 @@ def analyze_natal_chart_ai(name, positions, houses, chinese_data, elements, aspe
     Παρακαλώ στείλε μια πλήρη, γλαφυρή και βαθιά ψυχολογική/αστρολογική ανάλυση του χάρτη.
     Ανάλυσε τον πυρήνα της προσωπικότητας (Ήλιος, Σελήνη, Ωροσκόπος/1ος Οίκος), τις συναισθηματικές ανάγκες, τα ταλέντα, τις εσωτερικές συγκρούσεις (όψεις) και τη συνδυαστική σοφία του Κινεζικού Ζωδίου.
     """
-    
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"⚠️ Σφάλμα κατά την παραγωγή της ανάλυσης: {str(e)}"
+    return generate_ai_text(prompt)
+
 
 def analyze_transits_ai(name, timeframe, transits_data, lang="el"):
-    model = get_ai_model()
-    if not model:
-        return "⚠️ Το GEMINI_API_KEY δεν βρέθηκε."
-    
     prompt = f"""
     {SYSTEM_PERSONA}
     
@@ -69,18 +74,10 @@ def analyze_transits_ai(name, timeframe, transits_data, lang="el"):
     Κάνε μια ζωντανή, προγνωστική και συμβουλευτική ανάλυση για τον μήνα αυτό.
     Ξεχώρισε τις μεγάλες, κοσμικές τάσεις των αργών πλανητών (μακρο-κύκλοι) και πώς επηρεάζουν την ψυχολογία, τα επαγγελματικά και τις σχέσεις του ατόμου.
     """
-    
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"⚠️ Σφάλμα: {str(e)}"
+    return generate_ai_text(prompt)
+
 
 def analyze_synastry_ai(p1_name, p2_name, aspects_data, lang="el"):
-    model = get_ai_model()
-    if not model:
-        return "⚠️ Το GEMINI_API_KEY δεν βρέθηκε."
-    
     prompt = f"""
     {SYSTEM_PERSONA}
     
@@ -91,18 +88,10 @@ def analyze_synastry_ai(p1_name, p2_name, aspects_data, lang="el"):
     
     Ανάλυσε τη χημεία, την ερωτική/συναισθηματική έλξη, τα σημεία τριβής και το καρμικό μάθημα αυτής της σχέσης με γλαφυρό, διαισθητικό και βαθύ τρόπο.
     """
-    
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"⚠️ Σφάλμα: {str(e)}"
+    return generate_ai_text(prompt)
+
 
 def ask_caterpillar_chat(previous_report, question, lang="el"):
-    model = get_ai_model()
-    if not model:
-        return "⚠️ Το GEMINI_API_KEY δεν βρέθηκε."
-    
     prompt = f"""
     {SYSTEM_PERSONA}
     
@@ -112,12 +101,8 @@ def ask_caterpillar_chat(previous_report, question, lang="el"):
     
     Απάντησε με ζεστό, κατατοπιστικό και αστρολογικά τεκμηριωμένο ύφος.
     """
-    
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"⚠️ Σφάλμα: {str(e)}"
+    return generate_ai_text(prompt)
+
 
 def clear_ai_cache():
     pass
