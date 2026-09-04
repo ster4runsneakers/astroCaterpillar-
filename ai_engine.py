@@ -14,33 +14,29 @@ def _get_client():
     return genai.Client(api_key=api_key)
 
 def _generate_with_fallback(client, prompt):
-    """
-    Δοκιμάζει πρώτα το Primary Model (2.5-flash). 
-    Αν αποτύχει λόγω Quota (429), περνάει αυτόματα στο Fallback Model (2.5-flash-lite).
-    """
-    try:
-        # 1η Προσπάθεια: Gemini 2.5 Flash
-        response = client.models.generate_content(
-            model=PRIMARY_MODEL,
-            contents=prompt,
-        )
-        return response.text
-    except Exception as e:
-        err_str = str(e)
-        # Αν το σφάλμα αφορά όριο αιτημάτων (429 / Resource Exhausted)
-        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-            try:
-                # 2η Προσπάθεια: Μετάβαση στο Gemini 2.5 Flash Lite
-                response = client.models.generate_content(
-                    model=FALLBACK_MODEL,
-                    contents=prompt,
-                )
-                return response.text
-            except Exception as fallback_err:
-                return "⚠️ Το ημερήσιο όριο εξαντλήθηκε προσωρινά. Παρακαλώ δοκιμάστε ξανά σε λίγα λεπτά."
-        else:
-            return f"⚠️ Σφάλμα κατά την παραγωγή της ανάλυσης: {err_str}"
+    models_to_try = [
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'models/gemini-1.5-flash'
+    ]
+    
+    last_error = ""
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            return response.text
+        except Exception as e:
+            last_error = str(e)
+            # Αν είναι 429 (Quota), προχωράει στο επόμενο μοντέλο της λίστας
+            if "429" in last_error or "RESOURCE_EXHAUSTED" in last_error:
+                continue
+            else:
+                break
 
+    return f"⚠️ Το ημερήσιο όριο εξαντλήθηκε σε όλα τα μοντέλα. Δοκιμάστε αργότερα ή αλλάξτε API Key. ({last_error})"
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el"):
     client = _get_client()
     if not client:
