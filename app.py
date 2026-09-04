@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Protected Admin DB with JSON Import/Export)
+# app.py - AstroCaterpillar Micro-App (Houses & Chinese Astrology Visual Update)
 import datetime
 import json
 import sqlite3
@@ -90,7 +90,6 @@ def delete_profile_from_db(name):
     conn.close()
 
 def export_db_as_json():
-    """Εξάγει όλα τα προφίλ σε μορφή JSON string."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('SELECT name, date_str, time_str, city, positions_json FROM profiles')
@@ -109,7 +108,6 @@ def export_db_as_json():
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 def import_db_from_json(json_content):
-    """Εισάγει προφίλ στη βάση δεδομένων από αρχείο JSON."""
     data = json.loads(json_content)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -247,19 +245,33 @@ if menu_choice.startswith("1."):
     aspects = calculate_natal_aspects(natal_pos)
     cz_data = get_chinese_zodiac(b_date.year)
 
-    col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns([1.1, 0.9])
     
     with col1:
-        st.subheader("🪐 Αστρολογικός Τροχός" if lang == "el" else "🪐 Astrological Wheel")
+        st.subheader("🪐 Αστρολογικός Τροχός & Οίκοι" if lang == "el" else "🪐 Astrological Wheel & Houses")
         fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
         plot_natal_chart(ax, natal_pos, houses)
         st.pyplot(fig)
         
     with col2:
-        st.subheader("📊 Βασικοί Δείκτες" if lang == "el" else "📊 Key Indicators")
+        st.subheader("📊 Βασικοί Δείκτες & Κινεζική Αστρολογία" if lang == "el" else "📊 Key Indicators & Chinese Zodiac")
         st.write(f"**Ημερομηνία / Date:** {b_date.strftime('%d/%m/%Y')} {b_time.strftime('%H:%M')} ({city_name})")
-        st.write(f"**Κινεζικό Ζώδιο / Chinese Zodiac:** {cz_data.get('animal', '')} ({cz_data.get('element', '')})")
+        
+        # Κινεζική Αστρολογία Card
+        st.info(f"🐉 **Κινεζικό Ζώδιο:** {cz_data.get('animal', '')} ({cz_data.get('element', '')})")
+        
+        # Στοιχεία & Τρόποι
         st.json({"Elements": elements_pct, "Modalities": modalities_pct})
+        
+        # Πίνακας Οίκων (House Cusps)
+        with st.expander("🏠 Αιχμές 12 Οίκων (House Cusps)", expanded=False):
+            houses_formatted = {}
+            for h_num in range(1, 13):
+                h_deg = houses.get(f"House_{h_num}", 0)
+                sign_en, deg_in = get_sign_from_degrees(h_deg)
+                sign_display = ZODIAC_SIGNS.get(sign_en, {}).get(lang, sign_en)
+                houses_formatted[f"Οίκος {h_num}"] = f"{deg_in:.1f}° {sign_display}"
+            st.json(houses_formatted)
 
     st.markdown("---")
     st.subheader("🤖 AstroCaterpillar AI Analysis")
