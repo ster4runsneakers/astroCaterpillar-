@@ -1,11 +1,11 @@
-# ai_engine.py - AstroCaterpillar AI Engine (With Updated Active Model Fallback)
+# ai_engine.py - AstroCaterpillar AI Engine (Updated Model Names & Robust Fallback)
 import os
 import streamlit as st
 from google import genai
 
-# Ενεργά μοντέλα SDK
+# Λίστα ενεργών μοντέλων για το google-genai SDK
 PRIMARY_MODEL = 'gemini-2.5-flash'
-FALLBACK_MODEL = 'gemini-2.5-flash-lite'
+FALLBACK_MODELS = ['gemini-1.5-flash', 'gemini-2.5-pro']
 
 def _get_client():
     api_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
@@ -14,11 +14,11 @@ def _get_client():
     return genai.Client(api_key=api_key)
 
 def _generate_with_fallback(client, prompt):
-    models_to_try = [
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
-        'models/gemini-1.5-flash'
-    ]
+    """
+    Δοκιμάζει το Primary Model. Αν αποτύχει λόγω Quota/Rate Limit (429) ή 404,
+    μεταβαίνει αυτόματα στα διαθέσιμα Fallback μοντέλα.
+    """
+    models_to_try = [PRIMARY_MODEL] + FALLBACK_MODELS
     
     last_error = ""
     for model_name in models_to_try:
@@ -30,13 +30,20 @@ def _generate_with_fallback(client, prompt):
             return response.text
         except Exception as e:
             last_error = str(e)
-            # Αν είναι 429 (Quota), προχωράει στο επόμενο μοντέλο της λίστας
-            if "429" in last_error or "RESOURCE_EXHAUSTED" in last_error:
+            # Αν είναι σφάλμα ορίου (429/RESOURCE_EXHAUSTED) ή 404, δοκιμάζουμε το επόμενο μοντέλο
+            if any(err_code in last_error for err_code in ["429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND"]):
                 continue
             else:
                 break
 
-    return f"⚠️ Το ημερήσιο όριο εξαντλήθηκε σε όλα τα μοντέλα. Δοκιμάστε αργότερα ή αλλάξτε API Key. ({last_error})"
+    return (
+        "⚠️ Το ημερήσιο όριο (Quota) εξαντλήθηκε στο τρέχον API Key.\n\n"
+        "**Λύσεις:**\n"
+        "1. Περίμενε να μηδενιστεί ο ημερήσιος μετρητής της Google.\n"
+        "2. Δημιούργησε ένα νέο δωρεάν API Key από το [Google AI Studio](https://aistudio.google.com/) "
+        "και αντικατάστησέ το στα Streamlit Secrets (`GEMINI_API_KEY`)."
+    )
+
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el"):
     client = _get_client()
     if not client:
