@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Bilingual UI & Indicators Update)
+# app.py - AstroCaterpillar Micro-App (Includes Reference Guide for Houses & Zodiac)
 import datetime
 import json
 import sqlite3
@@ -25,7 +25,7 @@ from ai_engine import (
 from pdf_engine import create_astrology_pdf
 from ebook_pdf_engine import create_full_astrology_ebook, create_synastry_ebook
 
-# --- DICTIONARIES FOR BILINGUAL INDICATORS ---
+# --- DICTIONARIES FOR BILINGUAL INDICATORS & GUIDES ---
 CHINESE_TRANSLATIONS = {
     "Rat": "Ποντικός / Rat", "Ox": "Βόδι / Ox", "Tiger": "Τίγρης / Tiger",
     "Rabbit": "Λαγός / Rabbit", "Dragon": "Δράκος / Dragon", "Snake": "Φίδι / Snake",
@@ -46,6 +46,36 @@ MODALITY_TRANSLATIONS = {
     "Cardinal": "Παρορμητικά / Cardinal",
     "Fixed": "Σταθερά / Fixed",
     "Mutable": "Μεταβλητά / Mutable"
+}
+
+HOUSES_GUIDE = {
+    "1ος Οίκος / 1st House": "Εαυτός, εξωτερική εικόνα, σώμα, προσωπικότητα, η πρώτη εντύπωση.",
+    "2ος Οίκος / 2nd House": "Οικονομικά, προσωπικά εισοδήματα, υλικά αγαθά, αυτοεκτίμηση, προσωπικές αξίες.",
+    "3ος Οίκος / 3rd House": "Επικοινωνία, σκέψη, αδέλφια, κοντινά ταξίδια, καθημερινές συναλλαγές, μάθηση.",
+    "4ος Οίκος / 4th House": "Ρίζες, οικογένεια, σπίτι, παρελθόν, ψυχική βάση, ο ένας γονέας.",
+    "5ος Οίκος / 5th House": "Δημιουργικότητα, έρωτας, παιδιά, διασκέδαση, επιχειρηματικό ρίσκο, αυτοέκφραση.",
+    "6ος Οίκος / 6th House": "Καθημερινή εργασία, υγεία, ευεξία, ρουτίνα, υποχρεώσεις, προσφορά.",
+    "7ος Οίκος / 7th House": "Σχέσεις, γάμος, συνεργασίες, φανεροί εχθροί, κοινωνικές δεσμεύσεις.",
+    "8ος Οίκος / 8th House": "Κοινά οικονομικά, κληρονομιές, μετασχηματισμός, ψυχικό βάθος, σεξουαλικότητα, αναγέννηση.",
+    "9ος Οίκος / 9th House": "Ανώτερη γνώση, φιλοσοφία, μακρινά ταξίδια, νομικά θέματα, πεποιθήσεις.",
+    "10ος Οίκος / 10th House": "Καριέρα, κοινωνική καταξίωση, δημόσια εικόνα, φιλοδοξίες, κύρος.",
+    "11ος Οίκος / 11th House": "Φίλοι, συλλογικότητες, ομάδες, στόχοι, ελπίδες, κοινωνικά δίκτυα.",
+    "12ος Οίκος / 12th House": "Υποσυνείδητο, κρυφοί εχθροί, απομόνωση, ψυχική θεραπεία, καρμικά χρέη, πνευματικότητα."
+}
+
+ZODIAC_GUIDE = {
+    "Κριός / Aries": "Πυρ - Παρορμητικό | Πρωτοβουλία, δράση, θάρρος, παρορμητισμός, ηγεσία.",
+    "Ταύρος / Taurus": "Γη - Σταθερό | Σταθερότητα, ασφάλεια, υπομονή, υλική απόλαυση, επιμονή.",
+    "Δίδυμοι / Gemini": "Αέρας - Μεταβλητό | Προσαρμοστικότητα, περιέργεια, επικοινωνία, ευελιξία, διάνοια.",
+    "Καρκίνος / Cancer": "Νερό - Παρορμητικό | Συναισθηματική προστασία, φροντίδα, διαίσθηση, οικογένεια.",
+    "Λέων / Leo": "Πυρ - Σταθερό | Αυτοπεποίθηση, γενναιοδωρία, δημιουργικότητα, ηγετικό πνεύμα.",
+    "Παρθένος / Virgo": "Γη - Μεταβλητό | Αναλυτική σκέψη, λεπτομέρεια, πρακτικότητα, τελειομανία, προσφορά.",
+    "Ζυγός / Libra": "Αέρας - Παρορμητικό | Ισορροπία, αρμονία, δικαιοσύνη, συντροφικότητα, αισθητική.",
+    "Σκορπιός / Scorpio": "Νερό - Σταθερό | Βάθος, πάθος, μετασχηματισμός, έλεγχος, διαίσθηση.",
+    "Τοξότης / Sagittarius": "Πυρ - Μεταβλητό | Αισιοδοξία, επέκταση, αναζήτηση αλήθειας, ελευθερία, σοφία.",
+    "Αιγόκερως / Capricorn": "Γη - Παρορμητικό | Πειθαρχία, φιλοδοξία, δομή, ευθύνη, μακροπρόθεσμος σχεδιασμός.",
+    "Υδροχόος / Aquarius": "Αέρας - Σταθερό | Ανεξαρτησία, πρωτοπορία, συλλογικότητα, αυθεντικότητα, οραματισμός.",
+    "Ιχθύες / Pisces": "Νερό - Μεταβλητό | Ενσυναίσθηση, φαντασία, πνευματικότητα, συμπόνια, υπέρβαση."
 }
 
 # --- PAGE CONFIG ---
@@ -236,12 +266,13 @@ menu_options = [
     "2. Μηνιαίες Διελεύσεις / Monthly Transits",
     "3. Συναστρία / Synastry",
     "4. Εξαγωγή PDF / PDF Export",
-    "5. Admin Panel"
+    "5. Οδηγός Αστρολογίας / Astrology Guide",
+    "6. Admin Panel"
 ]
 menu_choice = st.sidebar.radio("Πλοήγηση / Navigation:", menu_options)
 
 # --- MAIN CONTROLLER ---
-if selected_profile == new_prof_label and not menu_choice.startswith("5."):
+if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or menu_choice.startswith("6.")):
     msg = "👈 Παρακαλώ εισάγετε τα στοιχεία σας στη sidebar / Please enter your details in the sidebar."
     st.warning(msg)
     st.stop()
@@ -269,7 +300,6 @@ if menu_choice.startswith("1."):
     aspects = calculate_natal_aspects(natal_pos)
     cz_data = get_chinese_zodiac(b_date.year)
 
-    # Δίγλωσση μετάφραση Κινεζικού Ζωδίου
     cz_animal_raw = cz_data.get('animal', '')
     cz_element_raw = cz_data.get('element', '')
     cz_animal_bi = CHINESE_TRANSLATIONS.get(cz_animal_raw, cz_animal_raw)
@@ -287,10 +317,8 @@ if menu_choice.startswith("1."):
         st.subheader("📊 Βασικοί Δείκτες / Key Indicators")
         st.write(f"**Ημερομηνία / Date:** {b_date.strftime('%d/%m/%Y')} {b_time.strftime('%H:%M')} ({city_name_el} / {city_name_en})")
         
-        # Κινεζική Αστρολογία Card (Δίγλωσση)
         st.info(f"🐉 **Κινεζικό Ζώδιο / Chinese Zodiac:** {cz_animal_bi} ({cz_element_bi})")
         
-        # Στοιχεία & Τρόποι (Δίγλωσσα JSON keys)
         elements_bilingual = {ELEMENT_TRANSLATIONS.get(k, k): v for k, v in elements_pct.items()}
         modalities_bilingual = {MODALITY_TRANSLATIONS.get(k, k): v for k, v in modalities_pct.items()}
         
@@ -299,7 +327,6 @@ if menu_choice.startswith("1."):
             "Ποιότητες / Modalities": modalities_bilingual
         })
         
-        # Πίνακας Οίκων (House Cusps - Δίγλωσσος)
         with st.expander("🏠 Αιχμές 12 Οίκων / House Cusps (12)", expanded=False):
             houses_formatted = {}
             for h_num in range(1, 13):
@@ -440,8 +467,27 @@ elif menu_choice.startswith("4."):
                 ebook_bytes = create_full_astrology_ebook(selected_profile, prof_data, lang=lang)
                 st.download_button("Download Ebook PDF", ebook_bytes, file_name=f"{selected_profile}_Ebook.pdf", mime="application/pdf")
 
-# --- TAB 5: ADMIN PANEL ---
+# --- TAB 5: ASTROLOGY GUIDE ---
 elif menu_choice.startswith("5."):
+    st.header("📚 Οδηγός Αστρολογίας / Astrology Guide")
+    st.markdown("Χρησιμοποιήστε τους παρακάτω πίνακες ως οδηγό αναφοράς για τη σημασία των 12 Οίκων και των 12 Ζωδίων.")
+    
+    col_g1, col_g2 = st.columns(2)
+    
+    with col_g1:
+        st.subheader("🏠 Οι 12 Οίκοι (Το 'Πού' της Ζωής)")
+        for house_title, house_desc in HOUSES_GUIDE.items():
+            with st.expander(house_title):
+                st.write(house_desc)
+                
+    with col_g2:
+        st.subheader("♈ Τα 12 Ζώδια (Το 'Πώς' της Ενέργειας)")
+        for zodiac_title, zodiac_desc in ZODIAC_GUIDE.items():
+            with st.expander(zodiac_title):
+                st.write(zodiac_desc)
+
+# --- TAB 6: ADMIN PANEL ---
+elif menu_choice.startswith("6."):
     st.header("⚙️ Admin Panel")
     
     if not st.session_state.is_admin:
