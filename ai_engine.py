@@ -1,26 +1,37 @@
-# ai_engine.py - AstroCaterpillar AI Engine (Updated Model Names & Robust Fallback)
+# ai_engine.py - AstroCaterpillar AI Engine (Hybrid BYOK & Admin Fallback)
 import os
 import streamlit as st
 from google import genai
 
-# Λίστα ενεργών μοντέλων για το google-genai SDK
 PRIMARY_MODEL = 'gemini-2.5-flash'
 FALLBACK_MODELS = ['gemini-1.5-flash', 'gemini-2.5-pro']
 
-def _get_client():
-    api_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-    if not api_key:
-        return None
-    return genai.Client(api_key=api_key)
+def _get_client(user_api_key=""):
+    """
+    Προτεραιότητα 1: Το API Key που πληκτρολόγησε ο χρήστης στη Sidebar.
+    Προτεραιότητα 2: Το Master Key από τα Secrets (ΜΟΝΟ αν ο χρήστης είναι Admin).
+    """
+    clean_user_key = user_api_key.strip() if user_api_key else ""
+    
+    if clean_user_key:
+        return genai.Client(api_key=clean_user_key), None
+    
+    # Αν δεν έδωσε Key ο χρήστης, ελέγχουμε αν είναι Admin
+    is_admin = st.session_state.get("is_admin", False)
+    master_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+    
+    if is_admin and master_key:
+        return genai.Client(api_key=master_key), None
+    
+    if not clean_user_key and not is_admin:
+        return None, "🔑 Παρακαλώ εισάγετε το δικό σας Gemini API Key στη Sidebar για να χρησιμοποιήσετε τις AI λειτουργίες."
+    
+    return None, "⚠️ Δεν βρέθηκε έγκυρο API Key."
 
 def _generate_with_fallback(client, prompt):
-    """
-    Δοκιμάζει το Primary Model. Αν αποτύχει λόγω Quota/Rate Limit (429) ή 404,
-    μεταβαίνει αυτόματα στα διαθέσιμα Fallback μοντέλα.
-    """
     models_to_try = [PRIMARY_MODEL] + FALLBACK_MODELS
-    
     last_error = ""
+    
     for model_name in models_to_try:
         try:
             response = client.models.generate_content(
@@ -30,24 +41,17 @@ def _generate_with_fallback(client, prompt):
             return response.text
         except Exception as e:
             last_error = str(e)
-            # Αν είναι σφάλμα ορίου (429/RESOURCE_EXHAUSTED) ή 404, δοκιμάζουμε το επόμενο μοντέλο
-            if any(err_code in last_error for err_code in ["429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND"]):
+            if any(err in last_error for err in ["429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND"]):
                 continue
             else:
                 break
 
-    return (
-        "⚠️ Το ημερήσιο όριο (Quota) εξαντλήθηκε στο τρέχον API Key.\n\n"
-        "**Λύσεις:**\n"
-        "1. Περίμενε να μηδενιστεί ο ημερήσιος μετρητής της Google.\n"
-        "2. Δημιούργησε ένα νέο δωρεάν API Key από το [Google AI Studio](https://aistudio.google.com/) "
-        "και αντικατάστησέ το στα Streamlit Secrets (`GEMINI_API_KEY`)."
-    )
+    return f"⚠️ Το όριο αιτημάτων (Quota) εξαντλήθηκε στο τρέχον API Key. Δοκιμάστε ξανά σε λίγο. ({last_error})"
 
-def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el"):
-    client = _get_client()
-    if not client:
-        return "⚠️ Σφάλμα: Δεν βρέθηκε το `GEMINI_API_KEY` στα Streamlit Secrets."
+def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
+    client, err = _get_client(user_api_key)
+    if err:
+        return err
 
     system_prompt = (
         "Είσαι ο Caterpillar – ένας αναλυτής αστρολογίας που λειτουργεί ως peer, μιλάει με την αλήθεια των αριθμών και των γεγονότων. "
@@ -69,10 +73,10 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
     
     return _generate_with_fallback(client, prompt)
 
-def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el"):
-    client = _get_client()
-    if not client:
-        return "⚠️ Σφάλμα: Δεν βρέθηκε το `GEMINI_API_KEY`."
+def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
+    client, err = _get_client(user_api_key)
+    if err:
+        return err
 
     prompt = f"""
     Είσαι ο Caterpillar. Κάνε μια αναλυτική, δεδομενοκεντρική στρατηγική ανάλυση μηνιαίων διελεύσεων για το προφίλ '{profile_name}' ({timeframe}):
@@ -83,10 +87,10 @@ def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el"):
     
     return _generate_with_fallback(client, prompt)
 
-def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el"):
-    client = _get_client()
-    if not client:
-        return "⚠️ Σφάλμα: Δεν βρέθηκε το `GEMINI_API_KEY`."
+def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el", user_api_key=""):
+    client, err = _get_client(user_api_key)
+    if err:
+        return err
 
     prompt = f"""
     Είσαι ο Caterpillar. Κάνε μια ουδέτερη και διαισθητική ανάλυση συναστρίας μεταξύ {p1} και {p2}:
@@ -97,10 +101,10 @@ def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el"):
     
     return _generate_with_fallback(client, prompt)
 
-def ask_caterpillar_chat(context_text, user_prompt, lang="el"):
-    client = _get_client()
-    if not client:
-        return "⚠️ Σφάλμα: Δεν βρέθηκε το `GEMINI_API_KEY`."
+def ask_caterpillar_chat(context_text, user_prompt, lang="el", user_api_key=""):
+    client, err = _get_client(user_api_key)
+    if err:
+        return err
 
     full_query = f"""
     Είσαι ο Caterpillar. Απάντησε στην ερώτηση του χρήστη με βάση το παρακάτω πλαίσιο και ιστορικό, διατηρώντας ουδέτερο και δεδομενοκεντρικό ύφος.
