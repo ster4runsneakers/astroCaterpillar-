@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Includes Interactive Plotly Chart & PDF Engine)
+# app.py - AstroCaterpillar Micro-App (Includes Complete Reference Guide)
 import datetime
 import json
 import sqlite3
@@ -87,6 +87,19 @@ RETROGRADE_GUIDE = {
     "Ουρανός / Uranus (R)": "Εσωτερική επαναστατικότητα, αναθεώρηση προσωπικής ελευθερίας και απρόσμενες συνειδητοποιήσεις.",
     "Ποσειδώνας / Neptune (R)": "Διάλυση αυταπατών, ενίσχυση διαίσθησης, πνευματική αφύπνιση.",
     "Πλούτωνας / Pluto (R)": "Βαθύς ψυχικός μετασχηματισμός, αποδέσμευση από παλιές δομές εξουσίας και μοτίβα ελέγχου."
+}
+
+ELEMENTS_GUIDE = {
+    "🔥 Πυρ / Fire": "Έμπνευση, πάθος, ζωτικότητα, παρορμητισμός, θάρρος, ενθουσιασμός. Άμεση δράση και ηγεσία.",
+    "🌿 Γη / Earth": "Σταθερότητα, πρακτικότητα, υλική ασφάλεια, ρεαλισμός, δομή, επιμονή. Εστίαση στο απτό αποτέλεσμα.",
+    "💨 Αέρας / Air": "Διάνοια, επικοινωνία, ιδέες, κοινωνικότητα, στρατηγική σκέψη. Λειτουργία μέσω του νου και της πληροφορίας.",
+    "🌊 Νερό / Water": "Συναισθήματα, διαίσθηση, ενσυναίσθηση, ψυχικό βάθος, μνήμη. Αντίληψη μέσω των αισθήσεων."
+}
+
+MODALITIES_GUIDE = {
+    "⚡ Παρορμητικά / Cardinal": "Η Αρχή & η Πρωτοβουλία. Ανοίγουν νέους δρόμους, ξεκινούν έργα, θέτουν στόχους.",
+    "🏛️ Σταθερά / Fixed": "Η Διατήρηση & η Θεμελίωση. Συγκεντρώνουν, σταθεροποιούν και προστατεύουν με αφοσίωση.",
+    "🌀 Μεταβλητά / Mutable": "Η Προσαρμογή & η Μετάβαση. Προσαρμόζονται, βελτιώνουν, διορθώνουν και εξελίσσουν."
 }
 
 # --- PAGE CONFIG ---
@@ -509,7 +522,7 @@ elif menu_choice.startswith("4."):
 # --- TAB 5: ASTROLOGY GUIDE ---
 elif menu_choice.startswith("5."):
     st.header("📚 Οδηγός Αστρολογίας / Astrology Guide")
-    st.markdown("Χρησιμοποιήστε τους παρακάτω πίνακες ως οδηγό αναφοράς για τη σημασία των 12 Οίκων, των 12 Ζωδίων και των Ανάδρομων Πλανητών.")
+    st.markdown("Χρησιμοποιήστε τους παρακάτω πίνακες ως οδηγό αναφοράς για τη σημασία των 12 Οίκων, των 12 Ζωδίων, των Ανάδρομων Πλανητών, των Στοιχείων και των Πιοτήτων.")
     
     col_g1, col_g2, col_g3 = st.columns(3)
     
@@ -530,6 +543,22 @@ elif menu_choice.startswith("5."):
         for retro_title, retro_desc in RETROGRADE_GUIDE.items():
             with st.expander(retro_title):
                 st.write(retro_desc)
+
+    st.markdown("---")
+    
+    col_g4, col_g5 = st.columns(2)
+    
+    with col_g4:
+        st.subheader("🧪 Τα 4 Στοιχεία / Elements")
+        for elem_title, elem_desc in ELEMENTS_GUIDE.items():
+            with st.expander(elem_title):
+                st.write(elem_desc)
+                
+    with col_g5:
+        st.subheader("⚖️ Οι 3 Ποιότητες / Modalities")
+        for mod_title, mod_desc in MODALITIES_GUIDE.items():
+            with st.expander(mod_title):
+                st.write(mod_desc)
 
 # --- TAB 6: ADMIN PANEL ---
 elif menu_choice.startswith("6."):
