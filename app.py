@@ -134,7 +134,7 @@ if selected_profile == new_prof_label:
                 hour_decimal = new_time.hour + (new_time.minute / 60.0)
                 pos = calculate_natal_positions(new_date.year, new_date.month, new_date.day, hour_decimal)
                 save_profile_to_db(new_name.strip(), new_date, new_time, selected_city_key, pos)
-                st.success(f"OK!")
+                st.success("OK!")
                 st.rerun()
             else:
                 st.error("Παρακαλώ εισάγετε όνομα." if lang == "el" else "Please enter a name.")
@@ -188,7 +188,7 @@ if menu_choice.startswith("1."):
     
     with col1:
         st.subheader("🪐 Αστρολογικός Τροχός" if lang == "el" else "🪐 Astrological Wheel")
-        fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117')
+        fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
         plot_natal_chart(ax, natal_pos, houses)
         st.pyplot(fig)
         
@@ -255,7 +255,7 @@ elif menu_choice.startswith("3."):
             pos2 = saved_profiles[p2]["positions"]
             syn_aspects = calculate_synastry_aspects(pos1, pos2)
             
-            fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117')
+            fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
             plot_biwheel_chart(ax, pos1, pos2)
             st.pyplot(fig)
             
@@ -273,7 +273,7 @@ elif menu_choice.startswith("4."):
         st.subheader("📄 One-Pager Summary")
         if st.button("📥 Download One-Pager (PDF)"):
             with st.spinner("Δημιουργία..." if lang == "el" else "Generating..."):
-                fig, ax = plt.subplots(figsize=(5, 5), facecolor='#121824')
+                fig, ax = plt.subplots(figsize=(5, 5), facecolor='#121824', subplot_kw={'projection': 'polar'})
                 plot_natal_chart(ax, prof_data["positions"])
                 
                 pdf_bytes = create_astrology_pdf(
