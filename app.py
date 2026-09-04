@@ -23,7 +23,7 @@ from ai_engine import (
     clear_ai_cache
 )
 from pdf_engine import create_astrology_pdf
-from ebook_pdf_engine import create_full_astrology_ebook
+from ebook_pdf_engine import create_full_astrology_ebook, create_synastry_ebook
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -250,18 +250,35 @@ elif menu_choice.startswith("3."):
         p1 = st.selectbox("Πρώτο Άτομο:" if lang == "el" else "Person 1:", profile_names, index=0)
         p2 = st.selectbox("Δεύτερο Άτομο:" if lang == "el" else "Person 2:", profile_names, index=1 if len(profile_names) > 1 else 0)
         
-        if p1 != p2 and st.button("💖 Υπολογισμός Συναστρίας" if lang == "el" else "💖 Calculate Synastry"):
-            pos1 = saved_profiles[p1]["positions"]
-            pos2 = saved_profiles[p2]["positions"]
-            syn_aspects = calculate_synastry_aspects(pos1, pos2)
-            
-            fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
-            plot_biwheel_chart(ax, pos1, pos2)
-            st.pyplot(fig)
-            
-            with st.spinner("Ανάλυση..." if lang == "el" else "Analyzing..."):
-                report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang)
-                st.markdown(report)
+        if p1 != p2:
+            if st.button("💖 Υπολογισμός Συναστρίας" if lang == "el" else "💖 Calculate Synastry"):
+                pos1 = saved_profiles[p1]["positions"]
+                pos2 = saved_profiles[p2]["positions"]
+                syn_aspects = calculate_synastry_aspects(pos1, pos2)
+                
+                fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
+                plot_biwheel_chart(ax, pos1, pos2)
+                st.pyplot(fig)
+                
+                with st.spinner("Ανάλυση..." if lang == "el" else "Analyzing..."):
+                    report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang)
+                    st.markdown(report)
+
+            st.markdown("---")
+            if st.button("📚 Εξαγωγή Synastry Ebook (PDF)"):
+                with st.spinner("Σύνθεση Ebook Συναστρίας..." if lang == "el" else "Building Synastry Ebook..."):
+                    syn_pdf_bytes = create_synastry_ebook(
+                        p1, p2, 
+                        saved_profiles[p1], 
+                        saved_profiles[p2], 
+                        lang=lang
+                    )
+                    st.download_button(
+                        "📥 Download Synastry Ebook (PDF)", 
+                        syn_pdf_bytes, 
+                        file_name=f"Synastry_{p1}_{p2}.pdf", 
+                        mime="application/pdf"
+                    )
 
 # --- TAB 4: EXPORT PDF ---
 elif menu_choice.startswith("4."):
