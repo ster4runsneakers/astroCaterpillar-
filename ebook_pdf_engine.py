@@ -220,4 +220,127 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
     pdf_buffer = io.BytesIO()
     HTML(string=html_content).write_pdf(pdf_buffer)
     return pdf_buffer.getvalue()
-  
+
+  def create_synastry_ebook(person1_name: str, person2_name: str, prof1_data: dict, prof2_data: dict, lang: str = "el") -> bytes:
+    """Παράγει ένα πλήρες Ebook PDF για τη Συναστρία 2 ατόμων."""
+    pos1 = prof1_data.get("positions", {})
+    pos2 = prof2_data.get("positions", {})
+    
+    syn_aspects = calculate_synastry_aspects(pos1, pos2)
+    
+    # Παραγωγή AI Ανάλυσης Συναστρίας
+    ai_report_markdown = analyze_synastry_ai(
+        person1_name, 
+        person2_name, 
+        str(syn_aspects), 
+        lang=lang
+    )
+
+    # Μορφοποίηση AI κειμένου
+    formatted_ai = ai_report_markdown
+    formatted_ai = re.sub(r'###\s*(.*)', r'<h3>\1</h3>', formatted_ai)
+    formatted_ai = re.sub(r'##\s*(.*)', r'<h2>\1</h2>', formatted_ai)
+    formatted_ai = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', formatted_ai)
+    formatted_ai = re.sub(r'\*(.*?)\*', r'<em>\1</em>', formatted_ai)
+    formatted_ai = formatted_ai.replace('\n', '<br/>')
+
+    # Διγλωσσικές Ετικέτες
+    if lang == "el":
+        t_title = f"AstroCaterpillar Synastry Ebook"
+        t_profiles = f"Συναστρία: {person1_name} & {person2_name}"
+        t_sec1 = "1. Κύριες Όψεις Συναστρίας"
+        t_sec2 = "2. Ψυχογραφική Ανάλυση Σχέσης"
+        t_th_p1 = person1_name
+        t_th_p2 = person2_name
+        t_th_aspect = "Όψη"
+        t_th_orb = "Απόκλιση (Orb)"
+        t_footer = "AstroCaterpillar AI Synastry Book — Όλα τα δικαιώματα διατηρούνται"
+    else:
+        t_title = f"AstroCaterpillar Synastry Ebook"
+        t_profiles = f"Synastry: {person1_name} & {person2_name}"
+        t_sec1 = "1. Core Synastry Aspects"
+        t_sec2 = "2. Psychological Relationship Analysis"
+        t_th_p1 = person1_name
+        t_th_p2 = person2_name
+        t_th_aspect = "Aspect"
+        t_th_orb = "Orb"
+        t_footer = "AstroCaterpillar AI Synastry Book — All rights reserved"
+
+    # Πίνακας Όψεων
+    rows_html = ""
+    for asp in syn_aspects[:15]:  # Προβολή των 15 σημαντικότερων όψεων
+        p1_clean = asp['p1'].replace("Person1_", "")
+        p2_clean = asp['p2'].replace("Person2_", "")
+        p1_display = PLANET_TRANSLATIONS.get(p1_clean, {}).get(lang, p1_clean)
+        p2_display = PLANET_TRANSLATIONS.get(p2_clean, {}).get(lang, p2_clean)
+        
+        rows_html += f"""
+        <tr>
+            <td><strong>{p1_display}</strong></td>
+            <td>{asp['aspect']}</td>
+            <td><strong>{p2_display}</strong></td>
+            <td>{asp['orb']}°</td>
+        </tr>
+        """
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="{lang}">
+    <head>
+        <meta charset="UTF-8">
+        <title>{t_title}</title>
+        <style>
+            *, *::before, *::after {{ box-sizing: border-box; }}
+            @page {{ size: A4; margin: 20mm 15mm; background-color: #0f172a; }}
+            body {{ margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; color: #f1f5f9; line-height: 1.6; font-size: 10.5pt; }}
+            .cover-header {{ border-bottom: 3px solid #ec4899; padding-bottom: 15px; margin-bottom: 25px; }}
+            h1 {{ font-size: 24pt; color: #f472b6; margin: 0 0 10px 0; letter-spacing: -0.5px; }}
+            .meta-info {{ font-size: 11pt; color: #cbd5e1; background-color: #1e293b; padding: 10px 14px; border-radius: 6px; }}
+            h2 {{ font-size: 14pt; color: #fbcfe8; border-left: 5px solid #ec4899; padding-left: 10px; margin-top: 25px; margin-bottom: 12px; page-break-after: avoid; }}
+            h3 {{ font-size: 11.5pt; color: #fdf2f8; margin-top: 15px; margin-bottom: 6px; page-break-after: avoid; }}
+            table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: #1e293b; border-radius: 6px; overflow: hidden; }}
+            th {{ background-color: #831843; color: #fce7f3; text-align: left; padding: 8px 12px; font-size: 9.5pt; }}
+            td {{ padding: 7px 12px; border-bottom: 1px solid #334155; font-size: 9.5pt; }}
+            .analysis-text {{ background-color: #1e293b; padding: 18px 20px; border-radius: 8px; border: 1px solid #334155; }}
+            .footer {{ text-align: center; font-size: 8pt; color: #64748b; margin-top: 30px; border-top: 1px solid #334155; padding-top: 10px; }}
+        </style>
+    </head>
+    <body>
+        <div class="cover-header">
+            <h1>{t_title}</h1>
+            <div class="meta-info">
+                <strong>{t_profiles}</strong>
+            </div>
+        </div>
+
+        <h2>{t_sec1}</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>{t_th_p1}</th>
+                    <th>{t_th_aspect}</th>
+                    <th>{t_th_p2}</th>
+                    <th>{t_th_orb}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+
+        <h2>{t_sec2}</h2>
+        <div class="analysis-text">
+            {formatted_ai}
+        </div>
+
+        <div class="footer">
+            {t_footer}
+        </div>
+    </body>
+    </html>
+    """
+
+    pdf_buffer = io.BytesIO()
+    HTML(string=html_content).write_pdf(pdf_buffer)
+    return pdf_buffer.getvalue()
+
