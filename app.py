@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Monthly Transits Engine)
+# app.py - AstroCaterpillar Micro-App (Protected Admin DB with JSON Import/Export)
 import datetime
 import json
 import sqlite3
@@ -32,7 +32,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- DATABASE SETUP ---
+# --- DATABASE SETUP (ADMIN ONLY) ---
 DB_FILE = "astro_data.db"
 
 def init_db():
@@ -90,6 +90,7 @@ def delete_profile_from_db(name):
     conn.close()
 
 def export_db_as_json():
+    """Εξάγει όλα τα προφίλ σε μορφή JSON string."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('SELECT name, date_str, time_str, city, positions_json FROM profiles')
@@ -106,6 +107,29 @@ def export_db_as_json():
             "positions": json.loads(r[4])
         })
     return json.dumps(data, indent=2, ensure_ascii=False)
+
+def import_db_from_json(json_content):
+    """Εισάγει προφίλ στη βάση δεδομένων από αρχείο JSON."""
+    data = json.loads(json_content)
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    imported_count = 0
+    for item in data:
+        name = item.get("name")
+        d_str = item.get("date")
+        t_str = item.get("time")
+        city = item.get("city")
+        positions = item.get("positions")
+        if name and d_str and t_str and city and positions:
+            pos_json = json.dumps(positions)
+            c.execute(
+                'INSERT OR REPLACE INTO profiles (name, date_str, time_str, city, positions_json) VALUES (?, ?, ?, ?, ?)',
+                (name, d_str, t_str, city, pos_json)
+            )
+            imported_count += 1
+    conn.commit()
+    conn.close()
+    return imported_count
 
 # --- SESSION STATE INITIALIZATION ---
 if "is_admin" not in st.session_state:
@@ -384,11 +408,12 @@ elif menu_choice.startswith("5."):
         st.write(f"**Μόνιμα Αποθηκευμένα Προφίλ στη Βάση:** {len(db_profiles)}")
         
         st.markdown("---")
-        st.subheader("📦 Εξαγωγή & Backup Βάσης Δεδομένων")
+        st.subheader("📦 Διαχείριση, Backup & Εισαγωγή Βάσης")
         
         col_dl1, col_dl2 = st.columns(2)
         
         with col_dl1:
+            st.markdown("##### 1. Εξαγωγή (Export)")
             json_data = export_db_as_json()
             st.download_button(
                 label="📥 Download Database (JSON)",
@@ -397,7 +422,6 @@ elif menu_choice.startswith("5."):
                 mime="application/json"
             )
             
-        with col_dl2:
             try:
                 with open(DB_FILE, "rb") as fp:
                     db_bytes = fp.read()
@@ -407,8 +431,21 @@ elif menu_choice.startswith("5."):
                     file_name="astro_data.db",
                     mime="application/x-sqlite3"
                 )
-            except Exception as e:
-                st.error("Δεν βρέθηκε το αρχείο βάσης δεδομένων.")
+            except Exception:
+                pass
+
+        with col_dl2:
+            st.markdown("##### 2. Εισαγωγή (Import JSON)")
+            uploaded_json = st.file_uploader("Ανεβάστε αρχείο JSON για επαναφορά προφίλ:", type=["json"])
+            if uploaded_json is not None:
+                if st.button("📤 Εισαγωγή Προφίλ στη Βάση"):
+                    try:
+                        content = uploaded_json.read().decode("utf-8")
+                        count = import_db_from_json(content)
+                        st.success(f"Εισήχθησαν με επιτυχία {count} προφίλ!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Σφάλμα κατά την εισαγωγή: {str(e)}")
 
         st.markdown("---")
         col_adm1, col_adm2 = st.columns(2)
