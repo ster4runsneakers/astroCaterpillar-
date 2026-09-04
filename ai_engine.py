@@ -1,10 +1,11 @@
-# ai_engine.py - AstroCaterpillar AI Engine (Hybrid BYOK & Admin Fallback)
+# ai_engine.py - AstroCaterpillar AI Engine (Hybrid BYOK & Verified Stable Fallback)
 import os
 import streamlit as st
 from google import genai
 
+# Λίστα ενεργών & σταθερών μοντέλων
 PRIMARY_MODEL = 'gemini-2.5-flash'
-FALLBACK_MODELS = ['gemini-1.5-flash', 'gemini-2.5-pro']
+FALLBACK_MODELS = ['gemini-2.5-flash-lite', 'gemini-1.5-flash']
 
 def _get_client(user_api_key=""):
     """
@@ -29,6 +30,10 @@ def _get_client(user_api_key=""):
     return None, "⚠️ Δεν βρέθηκε έγκυρο API Key."
 
 def _generate_with_fallback(client, prompt):
+    """
+    Δοκιμάζει το Primary Model (gemini-2.5-flash).
+    Αν εξαντληθεί το Quota (429) ή βρει σφάλμα, περνάει αυτόματα στα διαθέσιμα Fallback μοντέλα.
+    """
     models_to_try = [PRIMARY_MODEL] + FALLBACK_MODELS
     last_error = ""
     
@@ -41,12 +46,18 @@ def _generate_with_fallback(client, prompt):
             return response.text
         except Exception as e:
             last_error = str(e)
-            if any(err in last_error for err in ["429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND"]):
+            # Αν είναι σφάλμα ορίου (429/RESOURCE_EXHAUSTED) ή 404, δοκιμάζουμε το επόμενο μοντέλο
+            if any(err_code in last_error for err_code in ["429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND"]):
                 continue
             else:
                 break
 
-    return f"⚠️ Το όριο αιτημάτων (Quota) εξαντλήθηκε στο τρέχον API Key. Δοκιμάστε ξανά σε λίγο. ({last_error})"
+    return (
+        "⚠️ Το ημερήσιο όριο αιτημάτων (Quota) εξαντλήθηκε στο τρέχον API Key.\n\n"
+        "**Τι μπορείτε να κάνετε:**\n"
+        "1. Εισάγετε ένα δικό σας δωρεάν API Key στη Sidebar από το [Google AI Studio](https://aistudio.google.com/).\n"
+        "2. Αν είστε Admin, περιμένετε λίγα λεπτά να μηδενιστεί ο μετρητής της Google."
+    )
 
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     client, err = _get_client(user_api_key)
