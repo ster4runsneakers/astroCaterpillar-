@@ -13,8 +13,9 @@ ZODIAC_SYMBOLS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐",
 def plot_natal_chart(ax, positions: dict, houses: dict = None):
     """Σχεδιάζει έναν γενέθλιο αστρολογικό χάρτη σε πολικές συντεταγμένες."""
     ax.clear()
-    ax.set_theta_direction(-1)
-    ax.set_theta_zero_location("W")
+    if hasattr(ax, 'set_theta_direction'):
+        ax.set_theta_direction(-1)
+        ax.set_theta_zero_location("W")
     ax.set_facecolor('#0E1117')
 
     # Σχεδιασμός 12 Ζωδίων στον εξωτερικό κύκλο
@@ -42,8 +43,9 @@ def plot_natal_chart(ax, positions: dict, houses: dict = None):
 def plot_biwheel_chart(ax, pos1: dict, pos2: dict):
     """Σχεδιάζει έναν διπλό χάρτη (Bi-wheel) για Συναστρία."""
     ax.clear()
-    ax.set_theta_direction(-1)
-    ax.set_theta_zero_location("W")
+    if hasattr(ax, 'set_theta_direction'):
+        ax.set_theta_direction(-1)
+        ax.set_theta_zero_location("W")
     ax.set_facecolor('#0E1117')
 
     # Ζώδια
@@ -68,4 +70,3 @@ def plot_biwheel_chart(ax, pos1: dict, pos2: dict):
     ax.set_rticks([])
     ax.set_xticks([])
     ax.grid(False)
-      
