@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Includes Percentage Interpretation Guide)
+# app.py - AstroCaterpillar Micro-App (Includes Persistent Multi-turn Chat for Transits & Synastry)
 import datetime
 import json
 import sqlite3
@@ -213,6 +213,10 @@ if "is_admin" not in st.session_state:
 if "guest_profiles" not in st.session_state:
     st.session_state.guest_profiles = {}
 
+# Chat memory stores per category
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = {"natal": [], "transits": [], "synastry": []}
+
 # --- LANGUAGE SELECTOR ---
 st.sidebar.title("🐛 AstroCaterpillar")
 lang_choice = st.sidebar.selectbox("🌐 Γλώσσα / Language", ["Ελληνικά", "English"])
@@ -221,7 +225,7 @@ lang = "el" if lang_choice == "Ελληνικά" else "en"
 # --- PROFILE SOURCE CONTROLLER ---
 if st.session_state.is_admin:
     saved_profiles = load_profiles_from_db()
-    st.sidebar.success("🔑 Admin Mode Active" if lang == "el" else "🔑 Admin Mode Active")
+    st.sidebar.success("🔑 Admin Mode Active")
 else:
     saved_profiles = st.session_state.guest_profiles
 
@@ -356,7 +360,6 @@ if menu_choice.startswith("1."):
             "Ποιότητες / Modalities": modalities_bilingual
         })
         
-        # ΠΡΟΣΘΗΚΗ: Επεξηγηματικό expander για τα ποσοστά
         with st.expander("💡 Πώς διαβάζονται τα Ποσοστά (%)", expanded=False):
             st.markdown("""
             * **Υψηλό Ποσοστό (π.χ. >30%):** Δείχνει το **κυρίαρχο στοιχείο/ποιότητα**. Εκεί διοχετεύεται αβίαστα η μεγαλύτερη ενέργεια του ατόμου.
@@ -404,12 +407,23 @@ if menu_choice.startswith("1."):
         )
         
         st.markdown("---")
-        st.subheader("💬 Chat με τον AstroCaterpillar")
-        user_q = st.text_input("Κάνε μια ερώτηση πάνω στην ανάλυσή σου / Ask a question:")
-        if user_q and st.button("Απάντηση / Answer"):
+        st.subheader("💬 Chat με τον AstroCaterpillar (Γενέθλιος Χάρτης)")
+        
+        # Display history
+        for msg in st.session_state.chat_history["natal"]:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+                
+        user_q = st.chat_input("Κάνε μια ερώτηση πάνω στον γενέθλιο χάρτη σου...")
+        if user_q:
+            st.session_state.chat_history["natal"].append({"role": "user", "content": user_q})
             with st.spinner("Σκέφτεται... / Thinking..."):
-                ans = ask_caterpillar_chat(report_text, user_q, lang=lang)
-                st.write(ans)
+                # Pass whole conversation context
+                history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["natal"]])
+                full_prompt = f"Αρχική Ανάλυση:\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
+                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
+                st.session_state.chat_history["natal"].append({"role": "assistant", "content": ans})
+                st.rerun()
 
 # --- TAB 2: MONTHLY TRANSITS ---
 elif menu_choice.startswith("2."):
@@ -440,14 +454,36 @@ elif menu_choice.startswith("2."):
             natal_degrees = {p: extract_deg(v) for p, v in prof_data["positions"].items()}
             m_transits = calculate_monthly_transits(natal_degrees, sel_year, sel_month_num)
             report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang)
-            st.markdown(report)
-            
-            st.download_button(
-                label="📥 Download Transits Report (.txt)",
-                data=report,
-                file_name=f"Transits_Report_{selected_profile}_{sel_month_num}_{sel_year}.txt",
-                mime="text/plain"
-            )
+            st.session_state[f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"] = report
+
+    t_cache_key = f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"
+    if t_cache_key in st.session_state:
+        report_text = st.session_state[t_cache_key]
+        st.markdown(report_text)
+        
+        st.download_button(
+            label="📥 Download Transits Report (.txt)",
+            data=report_text,
+            file_name=f"Transits_Report_{selected_profile}_{sel_month_num}_{sel_year}.txt",
+            mime="text/plain"
+        )
+        
+        st.markdown("---")
+        st.subheader("💬 Chat με τον AstroCaterpillar (Διελεύσεις)")
+        
+        for msg in st.session_state.chat_history["transits"]:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+                
+        user_q = st.chat_input("Κάνε μια ερώτηση πάνω στις διελεύσεις του μήνα...")
+        if user_q:
+            st.session_state.chat_history["transits"].append({"role": "user", "content": user_q})
+            with st.spinner("Σκέφτεται... / Thinking..."):
+                history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["transits"]])
+                full_prompt = f"Αρχική Ανάλυση Διελεύσεων ({timeframe_label}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
+                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
+                st.session_state.chat_history["transits"].append({"role": "assistant", "content": ans})
+                st.rerun()
 
 # --- TAB 3: SYNASTRY ---
 elif menu_choice.startswith("3."):
@@ -471,30 +507,52 @@ elif menu_choice.startswith("3."):
                 
                 with st.spinner("Ανάλυση... / Analyzing..."):
                     report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang)
-                    st.markdown(report)
-                    
-                    st.download_button(
-                        label="📥 Download Synastry Report (.txt)",
-                        data=report,
-                        file_name=f"Synastry_Report_{p1}_{p2}.txt",
-                        mime="text/plain"
-                    )
+                    st.session_state[f"synastry_ai_{p1}_{p2}_{lang}"] = report
 
-            st.markdown("---")
-            if st.button("📚 Εξαγωγή Synastry Ebook (PDF)"):
-                with st.spinner("Σύνθεση Ebook... / Building Ebook..."):
-                    syn_pdf_bytes = create_synastry_ebook(
-                        p1, p2, 
-                        saved_profiles[p1], 
-                        saved_profiles[p2], 
-                        lang=lang
-                    )
-                    st.download_button(
-                        "📥 Download Synastry Ebook (PDF)", 
-                        syn_pdf_bytes, 
-                        file_name=f"Synastry_{p1}_{p2}.pdf", 
-                        mime="application/pdf"
-                    )
+            s_cache_key = f"synastry_ai_{p1}_{p2}_{lang}"
+            if s_cache_key in st.session_state:
+                report_text = st.session_state[s_cache_key]
+                st.markdown(report_text)
+                
+                st.download_button(
+                    label="📥 Download Synastry Report (.txt)",
+                    data=report_text,
+                    file_name=f"Synastry_Report_{p1}_{p2}.txt",
+                    mime="text/plain"
+                )
+
+                st.markdown("---")
+                if st.button("📚 Εξαγωγή Synastry Ebook (PDF)"):
+                    with st.spinner("Σύνθεση Ebook... / Building Ebook..."):
+                        syn_pdf_bytes = create_synastry_ebook(
+                            p1, p2, 
+                            saved_profiles[p1], 
+                            saved_profiles[p2], 
+                            lang=lang
+                        )
+                        st.download_button(
+                            "📥 Download Synastry Ebook (PDF)", 
+                            syn_pdf_bytes, 
+                            file_name=f"Synastry_{p1}_{p2}.pdf", 
+                            mime="application/pdf"
+                        )
+                
+                st.markdown("---")
+                st.subheader("💬 Chat με τον AstroCaterpillar (Συναστρία)")
+                
+                for msg in st.session_state.chat_history["synastry"]:
+                    with st.chat_message(msg["role"]):
+                        st.write(msg["content"])
+                        
+                user_q = st.chat_input("Κάνε μια ερώτηση πάνω στη συναστρία των δύο ατόμων...")
+                if user_q:
+                    st.session_state.chat_history["synastry"].append({"role": "user", "content": user_q})
+                    with st.spinner("Σκέφτεται... / Thinking..."):
+                        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["synastry"]])
+                        full_prompt = f"Αρχική Ανάλυση Συναστρίας ({p1} & {p2}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
+                        ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
+                        st.session_state.chat_history["synastry"].append({"role": "assistant", "content": ans})
+                        st.rerun()
 
 # --- TAB 4: EXPORT PDF ---
 elif menu_choice.startswith("4."):
@@ -632,7 +690,8 @@ elif menu_choice.startswith("6."):
         with col_adm1:
             if st.button("🧹 Καθαρισμός AI Cache / Clear AI Cache"):
                 clear_ai_cache()
-                st.success("Η AI Cache καθαρίστηκε!")
+                st.session_state.chat_history = {"natal": [], "transits": [], "synastry": []}
+                st.success("Η AI Cache και το ιστορικό Chat καθαρίστηκαν!")
         with col_adm2:
             if st.button("🚪 Αποσύνδεση Admin / Logout"):
                 st.session_state.is_admin = False
