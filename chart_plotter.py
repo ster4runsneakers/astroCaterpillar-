@@ -24,7 +24,7 @@ def extract_planet_info(val):
         return deg, is_retro
     return float(val), False
 
-# --- PLOTLY INTERACTIVE CHART (WITH RETROGRADE & OVERLAP HANDLING) ---
+# --- PLOTLY INTERACTIVE CHART (WITH HOUSES NUMBERS, RETROGRADE & OVERLAP HANDLING) ---
 def create_interactive_natal_plotly(positions: dict, houses: dict = None):
     fig = go.Figure()
 
@@ -54,7 +54,6 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
         symbol = PLANET_SYMBOLS.get(planet, planet[:2])
         status = "Ανάδρομος (R)" if is_retro else "Ορθόδρομος"
         
-        # Αν δύο πλανήτες είναι πολύ κοντά (< 5 μοίρες), μετατοπίζουμε ακτινικά το σύμβολο για να μην επικαλύπτονται
         if abs(deg - prev_deg) < 5.0 or abs(deg - prev_deg) > 355.0:
             current_radius = 0.72 if current_radius == 0.85 else 0.85
         else:
@@ -82,16 +81,36 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
         name="Πλανήτες"
     ))
 
-    # 3. Αιχμές Οίκων
+    # 3. Αιχμές & Αριθμοί 12 Οίκων (1-12) στο εσωτερικό
     if houses and len(houses) >= 12:
-        for i in range(1, 13):
-            h_deg = houses.get(f"House_{i}", (i-1)*30)
+        house_degs = [houses.get(f"House_{i}", (i-1)*30) for i in range(1, 13)]
+        
+        for i in range(12):
+            deg_start = house_degs[i]
+            deg_end = house_degs[(i + 1) % 12]
+            
+            # Γραμμή αιχμής
             fig.add_trace(go.Scatterpolar(
                 r=[0, 1.05],
-                theta=[h_deg, h_deg],
+                theta=[deg_start, deg_start],
                 mode='lines',
                 line=dict(color='#374151', width=1, dash='dash'),
                 hoverinfo='none',
+                showlegend=False
+            ))
+            
+            # Υπολογισμός μέσης γωνίας για τοποθέτηση του αριθμού του Οίκου στο κέντρο (r = 0.38)
+            diff = (deg_end - deg_start) % 360.0
+            mid_deg = (deg_start + diff / 2.0) % 360.0
+            
+            fig.add_trace(go.Scatterpolar(
+                r=[0.38],
+                theta=[mid_deg],
+                mode='text',
+                text=[str(i + 1)],
+                hoverinfo='text',
+                hovertext=[f"<b>{i+1}ος Οίκος</b>"],
+                textfont=dict(size=11, color='#9CA3AF', weight='bold'),
                 showlegend=False
             ))
 
@@ -108,7 +127,6 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
         height=520
     )
     return fig
-
 # --- MATPLOTLIB STATIC CHART (FOR PDF EXPORT) ---
 def plot_natal_chart(ax, positions: dict, houses: dict = None):
     ax.clear()
