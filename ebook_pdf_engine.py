@@ -32,7 +32,6 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
     aspects = calculate_natal_aspects(natal_pos)
     cz_data = get_chinese_zodiac(b_date.year)
 
-    # Παραγωγή AI Ανάλυσης
     ai_report_markdown = analyze_natal_chart_ai(
         profile_name,
         str(natal_pos),
@@ -43,7 +42,6 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
         lang=lang
     )
 
-    # Μορφοποίηση AI κειμένου
     formatted_ai = ai_report_markdown
     formatted_ai = re.sub(r'###\s*(.*)', r'<h3>\1</h3>', formatted_ai)
     formatted_ai = re.sub(r'##\s*(.*)', r'<h2>\1</h2>', formatted_ai)
@@ -51,7 +49,6 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
     formatted_ai = re.sub(r'\*(.*?)\*', r'<em>\1</em>', formatted_ai)
     formatted_ai = formatted_ai.replace('\n', '<br/>')
 
-    # Διγλωσσικές Ετικέτες
     if lang == "el":
         t_title = "AstroCaterpillar Executive Ebook"
         t_profile = "Προφίλ"
@@ -75,7 +72,6 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
         t_sec2 = "2. Complete Astrological & Psychological Analysis"
         t_footer = "AstroCaterpillar AI Book — All rights reserved"
 
-    # Πίνακας Θέσεων
     rows_html = ""
     for planet, deg in natal_pos.items():
         sign_en, deg_in = get_sign_from_degrees(deg)
@@ -159,7 +155,6 @@ def create_synastry_ebook(person1_name: str, person2_name: str, prof1_data: dict
     
     syn_aspects = calculate_synastry_aspects(pos1, pos2)
     
-    # Παραγωγή AI Ανάλυσης Συναστρίας
     ai_report_markdown = analyze_synastry_ai(
         person1_name, 
         person2_name, 
@@ -167,7 +162,6 @@ def create_synastry_ebook(person1_name: str, person2_name: str, prof1_data: dict
         lang=lang
     )
 
-    # Μορφοποίηση AI κειμένου
     formatted_ai = ai_report_markdown
     formatted_ai = re.sub(r'###\s*(.*)', r'<h3>\1</h3>', formatted_ai)
     formatted_ai = re.sub(r'##\s*(.*)', r'<h2>\1</h2>', formatted_ai)
@@ -175,9 +169,8 @@ def create_synastry_ebook(person1_name: str, person2_name: str, prof1_data: dict
     formatted_ai = re.sub(r'\*(.*?)\*', r'<em>\1</em>', formatted_ai)
     formatted_ai = formatted_ai.replace('\n', '<br/>')
 
-    # Διγλωσσικές Ετικέτες
     if lang == "el":
-        t_title = f"AstroCaterpillar Synastry Ebook"
+        t_title = "AstroCaterpillar Synastry Ebook"
         t_profiles = f"Συναστρία: {person1_name} & {person2_name}"
         t_sec1 = "1. Κύριες Όψεις Συναστρίας"
         t_sec2 = "2. Ψυχογραφική Ανάλυση Σχέσης"
@@ -187,7 +180,7 @@ def create_synastry_ebook(person1_name: str, person2_name: str, prof1_data: dict
         t_th_orb = "Απόκλιση (Orb)"
         t_footer = "AstroCaterpillar AI Synastry Book — Όλα τα δικαιώματα διατηρούνται"
     else:
-        t_title = f"AstroCaterpillar Synastry Ebook"
+        t_title = "AstroCaterpillar Synastry Ebook"
         t_profiles = f"Synastry: {person1_name} & {person2_name}"
         t_sec1 = "1. Core Synastry Aspects"
         t_sec2 = "2. Psychological Relationship Analysis"
@@ -197,7 +190,6 @@ def create_synastry_ebook(person1_name: str, person2_name: str, prof1_data: dict
         t_th_orb = "Orb"
         t_footer = "AstroCaterpillar AI Synastry Book — All rights reserved"
 
-    # Πίνακας Όψεων
     rows_html = ""
     for asp in syn_aspects[:15]:
         p1_clean = asp['p1'].replace("Person1_", "")
