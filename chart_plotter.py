@@ -24,7 +24,7 @@ def extract_planet_info(val):
         return deg, is_retro
     return float(val), False
 
-# --- PLOTLY INTERACTIVE CHART (FOR BROWSER & MOBILE HOVER/TOUCH) ---
+# --- PLOTLY INTERACTIVE CHART (WITH RETROGRADE & OVERLAP HANDLING) ---
 def create_interactive_natal_plotly(positions: dict, houses: dict = None):
     fig = go.Figure()
 
@@ -41,16 +41,31 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
         name="Ζώδια"
     ))
 
-    # 2. Πλανήτες με Tooltips
+    # 2. Πλανήτες με διαχείριση επικαλύψεων (Offset)
+    sorted_planets = sorted(positions.items(), key=lambda x: extract_planet_info(x[1])[0])
+    
     p_r, p_theta, p_text, p_hover, p_color = [], [], [], [], []
-    for planet, val in positions.items():
+    
+    prev_deg = -999
+    current_radius = 0.85
+
+    for planet, val in sorted_planets:
         deg, is_retro = extract_planet_info(val)
         symbol = PLANET_SYMBOLS.get(planet, planet[:2])
         status = "Ανάδρομος (R)" if is_retro else "Ορθόδρομος"
         
-        p_r.append(0.85)
+        # Αν δύο πλανήτες είναι πολύ κοντά (< 5 μοίρες), μετατοπίζουμε ακτινικά το σύμβολο για να μην επικαλύπτονται
+        if abs(deg - prev_deg) < 5.0 or abs(deg - prev_deg) > 355.0:
+            current_radius = 0.72 if current_radius == 0.85 else 0.85
+        else:
+            current_radius = 0.85
+        prev_deg = deg
+
+        display_text = f"<b>{symbol} (R)</b>" if is_retro else symbol
+        
+        p_r.append(current_radius)
         p_theta.append(deg)
-        p_text.append(f"{symbol} (R)" if is_retro else symbol)
+        p_text.append(display_text)
         p_hover.append(f"<b>{planet}</b> ({symbol})<br><b>Μοίρα:</b> {deg:.2f}°<br><b>Κατάσταση:</b> {status}")
         p_color.append('#EF4444' if is_retro else '#F59E0B')
 
@@ -63,7 +78,7 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
         hovertext=p_hover,
         textposition="top center",
         marker=dict(size=10, color=p_color),
-        textfont=dict(size=14, color='#F3F4F6'),
+        textfont=dict(size=13, color='#F3F4F6'),
         name="Πλανήτες"
     ))
 
@@ -90,7 +105,7 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
         plot_bgcolor="#0E1117",
         margin=dict(l=20, r=20, t=20, b=20),
         showlegend=False,
-        height=500
+        height=520
     )
     return fig
 
