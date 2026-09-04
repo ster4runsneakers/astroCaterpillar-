@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Houses & Chinese Astrology Visual Update)
+# app.py - AstroCaterpillar Micro-App (Bilingual UI & Indicators Update)
 import datetime
 import json
 import sqlite3
@@ -24,6 +24,29 @@ from ai_engine import (
 )
 from pdf_engine import create_astrology_pdf
 from ebook_pdf_engine import create_full_astrology_ebook, create_synastry_ebook
+
+# --- DICTIONARIES FOR BILINGUAL INDICATORS ---
+CHINESE_TRANSLATIONS = {
+    "Rat": "Ποντικός / Rat", "Ox": "Βόδι / Ox", "Tiger": "Τίγρης / Tiger",
+    "Rabbit": "Λαγός / Rabbit", "Dragon": "Δράκος / Dragon", "Snake": "Φίδι / Snake",
+    "Horse": "Άλογο / Horse", "Goat": "Πρόβατο / Goat", "Monkey": "Πίθηκος / Monkey",
+    "Rooster": "Πετεινός / Rooster", "Dog": "Σκύλος / Dog", "Pig": "Χοίρος / Pig",
+    "Wood": "Ξύλο / Wood", "Fire": "Φωτιά / Fire", "Earth": "Γη / Earth",
+    "Metal": "Μέταλλο / Metal", "Water": "Νερό / Water"
+}
+
+ELEMENT_TRANSLATIONS = {
+    "Fire": "Πυρ / Fire",
+    "Earth": "Γη / Earth",
+    "Air": "Αέρας / Air",
+    "Water": "Νερό / Water"
+}
+
+MODALITY_TRANSLATIONS = {
+    "Cardinal": "Παρορμητικά / Cardinal",
+    "Fixed": "Σταθερά / Fixed",
+    "Mutable": "Μεταβλητά / Mutable"
+}
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -149,38 +172,38 @@ else:
     saved_profiles = st.session_state.guest_profiles
 
 # --- SIDEBAR & NAVIGATION ---
-t_profiles_header = "👤 Διαχείριση Προφίλ" if lang == "el" else "👤 Profile Management"
+t_profiles_header = "👤 Διαχείριση Προφίλ / Profile Management"
 st.sidebar.subheader(t_profiles_header)
 
 profile_names = list(saved_profiles.keys())
-new_prof_label = "-- Νέο Προφίλ --" if lang == "el" else "-- New Profile --"
+new_prof_label = "-- Νέο Προφίλ / New Profile --"
 selected_profile = st.sidebar.selectbox(
-    "Επιλογή Προφίλ:" if lang == "el" else "Select Profile:",
+    "Επιλογή Προφίλ / Select Profile:",
     [new_prof_label] + profile_names
 )
 
 if selected_profile == new_prof_label:
-    exp_title = "➕ Προσθήκη Προφίλ" if lang == "el" else "➕ Add Profile"
+    exp_title = "➕ Προσθήκη Προφίλ / Add Profile"
     with st.sidebar.expander(exp_title, expanded=True):
-        new_name = st.text_input("Όνομα / Αρχικά:" if lang == "el" else "Name / Initials:")
+        new_name = st.text_input("Όνομα / Αρχικά (Name / Initials):")
         new_date = st.date_input(
-            "Ημερομηνία Γέννησης:" if lang == "el" else "Birth Date:",
+            "Ημερομηνία Γέννησης / Birth Date:",
             value=datetime.date(1990, 1, 1),
             min_value=datetime.date(1900, 1, 1),
             max_value=datetime.date.today()
         )
-        new_time = st.time_input("Ώρα Γέννησης:" if lang == "el" else "Birth Time:", datetime.time(12, 0))
+        new_time = st.time_input("Ώρα Γέννησης / Birth Time:", datetime.time(12, 0))
         
         city_keys = list(GREEK_AND_WORLD_CITIES.keys())
-        city_options = {k: GREEK_AND_WORLD_CITIES[k][lang] for k in city_keys}
+        city_options = {k: f"{GREEK_AND_WORLD_CITIES[k]['el']} / {GREEK_AND_WORLD_CITIES[k]['en']}" for k in city_keys}
         selected_city_key = st.selectbox(
-            "Πόλη Γέννησης:" if lang == "el" else "Birth City:",
+            "Πόλη Γέννησης / Birth City:",
             options=city_keys,
             format_func=lambda x: city_options[x],
             index=city_keys.index("Athens") if "Athens" in city_keys else 0
         )
         
-        btn_save = "💾 Υπολογισμός Χάρτη" if lang == "el" else "💾 Calculate Chart"
+        btn_save = "💾 Υπολογισμός Χάρτη / Calculate Chart"
         if st.button(btn_save):
             if new_name.strip():
                 hour_decimal = new_time.hour + (new_time.minute / 60.0)
@@ -195,10 +218,10 @@ if selected_profile == new_prof_label:
                 st.success("OK!")
                 st.rerun()
             else:
-                st.error("Παρακαλώ εισάγετε όνομα." if lang == "el" else "Please enter a name.")
+                st.error("Παρακαλώ εισάγετε όνομα / Please enter a name.")
 else:
     st.sidebar.info(f"**{selected_profile}**")
-    btn_del = "🗑️ Αφαίρεση Προφίλ" if lang == "el" else "🗑️ Remove Profile"
+    btn_del = "🗑️ Αφαίρεση Προφίλ / Remove Profile"
     if st.sidebar.button(btn_del):
         if st.session_state.is_admin:
             delete_profile_from_db(selected_profile)
@@ -209,17 +232,17 @@ else:
 st.sidebar.markdown("---")
 
 menu_options = [
-    "1. Γενέθλιος Χάρτης" if lang == "el" else "1. Natal Chart",
-    "2. Μηνιαίες Διελεύσεις" if lang == "el" else "2. Monthly Transits",
-    "3. Συναστρία" if lang == "el" else "3. Synastry",
-    "4. Εξαγωγή PDF" if lang == "el" else "4. PDF Export",
+    "1. Γενέθλιος Χάρτης / Natal Chart",
+    "2. Μηνιαίες Διελεύσεις / Monthly Transits",
+    "3. Συναστρία / Synastry",
+    "4. Εξαγωγή PDF / PDF Export",
     "5. Admin Panel"
 ]
-menu_choice = st.sidebar.radio("Πλοήγηση:" if lang == "el" else "Navigation:", menu_options)
+menu_choice = st.sidebar.radio("Πλοήγηση / Navigation:", menu_options)
 
 # --- MAIN CONTROLLER ---
 if selected_profile == new_prof_label and not menu_choice.startswith("5."):
-    msg = "👈 Παρακαλώ εισάγετε τα στοιχεία σας στη sidebar για να δημιουργηθεί ο χάρτης σας." if lang == "el" else "👈 Please enter your details in the sidebar to generate your chart."
+    msg = "👈 Παρακαλώ εισάγετε τα στοιχεία σας στη sidebar / Please enter your details in the sidebar."
     st.warning(msg)
     st.stop()
 
@@ -232,7 +255,8 @@ if menu_choice.startswith("1."):
     b_date = prof_data["date"]
     b_time = prof_data["time"]
     city_key = prof_data["city"]
-    city_name = GREEK_AND_WORLD_CITIES.get(city_key, {}).get(lang, city_key)
+    city_name_el = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("el", city_key)
+    city_name_en = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("en", city_key)
     natal_pos = prof_data["positions"]
     
     lat = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("lat", 37.9838)
@@ -245,40 +269,52 @@ if menu_choice.startswith("1."):
     aspects = calculate_natal_aspects(natal_pos)
     cz_data = get_chinese_zodiac(b_date.year)
 
+    # Δίγλωσση μετάφραση Κινεζικού Ζωδίου
+    cz_animal_raw = cz_data.get('animal', '')
+    cz_element_raw = cz_data.get('element', '')
+    cz_animal_bi = CHINESE_TRANSLATIONS.get(cz_animal_raw, cz_animal_raw)
+    cz_element_bi = CHINESE_TRANSLATIONS.get(cz_element_raw, cz_element_raw)
+
     col1, col2 = st.columns([1.1, 0.9])
     
     with col1:
-        st.subheader("🪐 Αστρολογικός Τροχός & Οίκοι" if lang == "el" else "🪐 Astrological Wheel & Houses")
+        st.subheader("🪐 Αστρολογικός Τροχός & Οίκοι / Astrological Wheel & Houses")
         fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
         plot_natal_chart(ax, natal_pos, houses)
         st.pyplot(fig)
         
     with col2:
-        st.subheader("📊 Βασικοί Δείκτες & Κινεζική Αστρολογία" if lang == "el" else "📊 Key Indicators & Chinese Zodiac")
-        st.write(f"**Ημερομηνία / Date:** {b_date.strftime('%d/%m/%Y')} {b_time.strftime('%H:%M')} ({city_name})")
+        st.subheader("📊 Βασικοί Δείκτες / Key Indicators")
+        st.write(f"**Ημερομηνία / Date:** {b_date.strftime('%d/%m/%Y')} {b_time.strftime('%H:%M')} ({city_name_el} / {city_name_en})")
         
-        # Κινεζική Αστρολογία Card
-        st.info(f"🐉 **Κινεζικό Ζώδιο:** {cz_data.get('animal', '')} ({cz_data.get('element', '')})")
+        # Κινεζική Αστρολογία Card (Δίγλωσση)
+        st.info(f"🐉 **Κινεζικό Ζώδιο / Chinese Zodiac:** {cz_animal_bi} ({cz_element_bi})")
         
-        # Στοιχεία & Τρόποι
-        st.json({"Elements": elements_pct, "Modalities": modalities_pct})
+        # Στοιχεία & Τρόποι (Δίγλωσσα JSON keys)
+        elements_bilingual = {ELEMENT_TRANSLATIONS.get(k, k): v for k, v in elements_pct.items()}
+        modalities_bilingual = {MODALITY_TRANSLATIONS.get(k, k): v for k, v in modalities_pct.items()}
         
-        # Πίνακας Οίκων (House Cusps)
-        with st.expander("🏠 Αιχμές 12 Οίκων (House Cusps)", expanded=False):
+        st.json({
+            "Στοιχεία / Elements": elements_bilingual,
+            "Ποιότητες / Modalities": modalities_bilingual
+        })
+        
+        # Πίνακας Οίκων (House Cusps - Δίγλωσσος)
+        with st.expander("🏠 Αιχμές 12 Οίκων / House Cusps (12)", expanded=False):
             houses_formatted = {}
             for h_num in range(1, 13):
                 h_deg = houses.get(f"House_{h_num}", 0)
                 sign_en, deg_in = get_sign_from_degrees(h_deg)
-                sign_display = ZODIAC_SIGNS.get(sign_en, {}).get(lang, sign_en)
-                houses_formatted[f"Οίκος {h_num}"] = f"{deg_in:.1f}° {sign_display}"
+                sign_el = ZODIAC_SIGNS.get(sign_en, {}).get("el", sign_en)
+                houses_formatted[f"Οίκος {h_num} / House {h_num}"] = f"{deg_in:.1f}° {sign_el} / {sign_en}"
             st.json(houses_formatted)
 
     st.markdown("---")
     st.subheader("🤖 AstroCaterpillar AI Analysis")
     
-    btn_ai = "🚀 Παραγωγή AI Ανάλυσης" if lang == "el" else "🚀 Generate AI Analysis"
+    btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
     if st.button(btn_ai):
-        with st.spinner("Ο AstroCaterpillar αναλύει τα δεδομένα..." if lang == "el" else "AstroCaterpillar is analyzing data..."):
+        with st.spinner("Ο AstroCaterpillar αναλύει τα δεδομένα... / Analyzing..."):
             report = analyze_natal_chart_ai(
                 selected_profile,
                 str(natal_pos),
@@ -297,51 +333,54 @@ if menu_choice.startswith("1."):
         
         st.markdown("---")
         st.subheader("💬 Chat με τον AstroCaterpillar")
-        user_q = st.text_input("Κάνε μια ερώτηση πάνω στην ανάλυσή σου:" if lang == "el" else "Ask a question about your chart:")
-        if user_q and st.button("Απάντηση" if lang == "el" else "Answer"):
-            with st.spinner("Σκέφτεται..." if lang == "el" else "Thinking..."):
+        user_q = st.text_input("Κάνε μια ερώτηση πάνω στην ανάλυσή σου / Ask a question:")
+        if user_q and st.button("Απάντηση / Answer"):
+            with st.spinner("Σκέφτεται... / Thinking..."):
                 ans = ask_caterpillar_chat(report_text, user_q, lang=lang)
                 st.write(ans)
 
 # --- TAB 2: MONTHLY TRANSITS ---
 elif menu_choice.startswith("2."):
-    st.header(f"📅 Μηνιαίες Διελεύσεις: {selected_profile}" if lang == "el" else f"📅 Monthly Transits: {selected_profile}")
+    st.header(f"📅 Μηνιαίες Διελεύσεις / Monthly Transits: {selected_profile}")
     
     col_t1, col_t2 = st.columns(2)
     
-    months_el = ["Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος", "Ιούλιος", "Αύγουστος", "Σεπτέμβριος", "Οκτώβριος", "Νοέμβριος", "Δεκέμβριος"]
-    months_en = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-    months_list = months_el if lang == "el" else months_en
+    months_bilingual = [
+        "Ιανουάριος / January", "Φεβρουάριος / February", "Μάρτιος / March",
+        "Απρίλιος / April", "Μάιος / May", "Ιούνιος / June",
+        "Ιούλιος / July", "Αύγουστος / August", "Σεπτέμβριος / September",
+        "Οκτώβριος / October", "Νοέμβριος / November", "Δεκέμβριος / December"
+    ]
     
     current_month = datetime.date.today().month
     current_year = datetime.date.today().year
     
     with col_t1:
-        sel_month_name = st.selectbox("Επιλογή Μήνα:" if lang == "el" else "Select Month:", months_list, index=current_month - 1)
-        sel_month_num = months_list.index(sel_month_name) + 1
+        sel_month_name = st.selectbox("Επιλογή Μήνα / Select Month:", months_bilingual, index=current_month - 1)
+        sel_month_num = months_bilingual.index(sel_month_name) + 1
     with col_t2:
-        sel_year = st.number_input("Επιλογή Έτους:" if lang == "el" else "Select Year:", min_value=2024, max_value=2035, value=current_year)
+        sel_year = st.number_input("Επιλογή Έτους / Select Year:", min_value=2024, max_value=2035, value=current_year)
     
     timeframe_label = f"{sel_month_name} {sel_year}"
     
-    if st.button("🔮 Στρατηγική Ανάλυση Μήνα" if lang == "el" else "🔮 Analyze Monthly Trends"):
-        with st.spinner("Υπολογισμός Μακρο-Κύκλων..." if lang == "el" else "Calculating Macro Cycles..."):
+    if st.button("🔮 Στρατηγική Ανάλυση Μήνα / Analyze Monthly Trends"):
+        with st.spinner("Υπολογισμός Μακρο-Κύκλων... / Calculating Macro Cycles..."):
             m_transits = calculate_monthly_transits(prof_data["positions"], sel_year, sel_month_num)
             report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang)
             st.markdown(report)
 
 # --- TAB 3: SYNASTRY ---
 elif menu_choice.startswith("3."):
-    st.header("💞 Συναστρία" if lang == "el" else "💞 Synastry")
+    st.header("💞 Συναστρία / Synastry")
     
     if len(profile_names) < 2:
-        st.warning("Απαιτούνται τουλάχιστον 2 δημιουργημένα προφίλ στη sidebar." if lang == "el" else "At least 2 profiles in the sidebar are required.")
+        st.warning("Απαιτούνται τουλάχιστον 2 προφίλ / At least 2 profiles required.")
     else:
-        p1 = st.selectbox("Πρώτο Άτομο:" if lang == "el" else "Person 1:", profile_names, index=0)
-        p2 = st.selectbox("Δεύτερο Άτομο:" if lang == "el" else "Person 2:", profile_names, index=1 if len(profile_names) > 1 else 0)
+        p1 = st.selectbox("Πρώτο Άτομο / Person 1:", profile_names, index=0)
+        p2 = st.selectbox("Δεύτερο Άτομο / Person 2:", profile_names, index=1 if len(profile_names) > 1 else 0)
         
         if p1 != p2:
-            if st.button("💖 Υπολογισμός Συναστρίας" if lang == "el" else "💖 Calculate Synastry"):
+            if st.button("💖 Υπολογισμός Συναστρίας / Calculate Synastry"):
                 pos1 = saved_profiles[p1]["positions"]
                 pos2 = saved_profiles[p2]["positions"]
                 syn_aspects = calculate_synastry_aspects(pos1, pos2)
@@ -350,13 +389,13 @@ elif menu_choice.startswith("3."):
                 plot_biwheel_chart(ax, pos1, pos2)
                 st.pyplot(fig)
                 
-                with st.spinner("Ανάλυση..." if lang == "el" else "Analyzing..."):
+                with st.spinner("Ανάλυση... / Analyzing..."):
                     report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang)
                     st.markdown(report)
 
             st.markdown("---")
             if st.button("📚 Εξαγωγή Synastry Ebook (PDF)"):
-                with st.spinner("Σύνθεση Ebook Συναστρίας..." if lang == "el" else "Building Synastry Ebook..."):
+                with st.spinner("Σύνθεση Ebook... / Building Ebook..."):
                     syn_pdf_bytes = create_synastry_ebook(
                         p1, p2, 
                         saved_profiles[p1], 
@@ -372,14 +411,14 @@ elif menu_choice.startswith("3."):
 
 # --- TAB 4: EXPORT PDF ---
 elif menu_choice.startswith("4."):
-    st.header(f"📥 Εξαγωγή PDF: {selected_profile}" if lang == "el" else f"📥 PDF Export: {selected_profile}")
+    st.header(f"📥 Εξαγωγή PDF / PDF Export: {selected_profile}")
     
     col_a, col_b = st.columns(2)
     
     with col_a:
         st.subheader("📄 One-Pager Summary")
         if st.button("📥 Download One-Pager (PDF)"):
-            with st.spinner("Δημιουργία..." if lang == "el" else "Generating..."):
+            with st.spinner("Δημιουργία... / Generating..."):
                 fig, ax = plt.subplots(figsize=(5, 5), facecolor='#121824', subplot_kw={'projection': 'polar'})
                 plot_natal_chart(ax, prof_data["positions"])
                 
@@ -397,7 +436,7 @@ elif menu_choice.startswith("4."):
     with col_b:
         st.subheader("📚 Executive Ebook")
         if st.button("📥 Download Ebook (PDF)"):
-            with st.spinner("Σύνθεση Ebook..." if lang == "el" else "Building Ebook..."):
+            with st.spinner("Σύνθεση Ebook... / Building Ebook..."):
                 ebook_bytes = create_full_astrology_ebook(selected_profile, prof_data, lang=lang)
                 st.download_button("Download Ebook PDF", ebook_bytes, file_name=f"{selected_profile}_Ebook.pdf", mime="application/pdf")
 
@@ -407,25 +446,25 @@ elif menu_choice.startswith("5."):
     
     if not st.session_state.is_admin:
         admin_pass = st.text_input("Κωδικός Πρόσβασης / Admin Password:", type="password")
-        if st.button("Σύνδεση ως Admin"):
+        if st.button("Σύνδεση ως Admin / Login"):
             if admin_pass == "admin123":
                 st.session_state.is_admin = True
-                st.success("Πρόσβαση εγκρίθηκε!")
+                st.success("Πρόσβαση εγκρίθηκε! / Access Granted!")
                 st.rerun()
             else:
-                st.error("Λανθασμένος κωδικός πρόσβασης.")
+                st.error("Λανθασμένος κωδικός / Incorrect Password.")
     else:
-        st.success("Είστε συνδεδεμένος ως Admin!")
+        st.success("Είστε συνδεδεμένος ως Admin / Logged in as Admin!")
         db_profiles = load_profiles_from_db()
         st.write(f"**Μόνιμα Αποθηκευμένα Προφίλ στη Βάση:** {len(db_profiles)}")
         
         st.markdown("---")
-        st.subheader("📦 Διαχείριση, Backup & Εισαγωγή Βάσης")
+        st.subheader("📦 Διαχείριση, Backup & Εισαγωγή Βάσης / Database Management")
         
         col_dl1, col_dl2 = st.columns(2)
         
         with col_dl1:
-            st.markdown("##### 1. Εξαγωγή (Export)")
+            st.markdown("##### 1. Εξαγωγή / Export")
             json_data = export_db_as_json()
             st.download_button(
                 label="📥 Download Database (JSON)",
@@ -447,25 +486,25 @@ elif menu_choice.startswith("5."):
                 pass
 
         with col_dl2:
-            st.markdown("##### 2. Εισαγωγή (Import JSON)")
-            uploaded_json = st.file_uploader("Ανεβάστε αρχείο JSON για επαναφορά προφίλ:", type=["json"])
+            st.markdown("##### 2. Εισαγωγή / Import JSON")
+            uploaded_json = st.file_uploader("Ανεβάστε αρχείο JSON / Upload JSON file:", type=["json"])
             if uploaded_json is not None:
-                if st.button("📤 Εισαγωγή Προφίλ στη Βάση"):
+                if st.button("📤 Εισαγωγή Προφίλ / Import Profiles"):
                     try:
                         content = uploaded_json.read().decode("utf-8")
                         count = import_db_from_json(content)
-                        st.success(f"Εισήχθησαν με επιτυχία {count} προφίλ!")
+                        st.success(f"Εισήχθησαν {count} προφίλ! / Imported {count} profiles!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Σφάλμα κατά την εισαγωγή: {str(e)}")
+                        st.error(f"Σφάλμα / Error: {str(e)}")
 
         st.markdown("---")
         col_adm1, col_adm2 = st.columns(2)
         with col_adm1:
-            if st.button("🧹 Καθαρισμός AI Cache"):
+            if st.button("🧹 Καθαρισμός AI Cache / Clear AI Cache"):
                 clear_ai_cache()
                 st.success("Η AI Cache καθαρίστηκε!")
         with col_adm2:
-            if st.button("🚪 Αποσύνδεση Admin (Logout)"):
+            if st.button("🚪 Αποσύνδεση Admin / Logout"):
                 st.session_state.is_admin = False
                 st.rerun()
