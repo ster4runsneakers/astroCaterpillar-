@@ -1,4 +1,4 @@
-# ai_engine.py - AstroCaterpillar Unified Engine (OpenRouter + Gemini Fallback)
+# ai_engine.py - AstroCaterpillar Unified Engine (Free OpenRouter Models + Gemini)
 import os
 import streamlit as st
 from google import genai
@@ -14,7 +14,6 @@ def _get_openrouter_client(user_api_key=""):
     if clean_user_key and clean_user_key.startswith("sk-or-"):
         return OpenAI(api_key=clean_user_key, base_url="https://openrouter.ai/api/v1")
     
-    # Έλεγχος στα Secrets για OPENROUTER_API_KEY ή DEEPSEEK_API_KEY
     master_key = (
         st.secrets.get("OPENROUTER_API_KEY", "") or 
         st.secrets.get("DEEPSEEK_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
@@ -37,31 +36,40 @@ def _get_gemini_client(user_api_key=""):
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
     last_errors = []
 
-    # 1η Προσπάθεια: OpenRouter (DeepSeek V3)
+    # 1η Προσπάθεια: OpenRouter με ΔΩΡΕΑΝ Μοντέλα (Free Tier Models)
     or_client = _get_openrouter_client(user_api_key)
     if or_client:
-        try:
-            response = or_client.chat.completions.create(
-                model="deepseek/deepseek-chat",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt}
-                ],
-                extra_headers={
-                    "HTTP-Referer": "https://astrocaterpillar.streamlit.app",
-                    "X-Title": "AstroCaterpillar AI"
-                },
-                stream=False
-            )
-            if response and response.choices:
-                return response.choices[0].message.content
-        except Exception as e:
-            last_errors.append(f"OpenRouter/DeepSeek: {str(e)}")
+        # Λίστα εντελώς δωρεάν μοντέλων στο OpenRouter
+        free_or_models = [
+            "google/gemini-2.0-flash-exp:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "deepseek/deepseek-r1:free"
+        ]
+        
+        for or_model in free_or_models:
+            try:
+                response = or_client.chat.completions.create(
+                    model=or_model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt}
+                    ],
+                    extra_headers={
+                        "HTTP-Referer": "https://astrocaterpillar.streamlit.app",
+                        "X-Title": "AstroCaterpillar AI"
+                    },
+                    stream=False
+                )
+                if response and response.choices:
+                    return response.choices[0].message.content
+            except Exception as e:
+                last_errors.append(f"OpenRouter ({or_model}): {str(e)}")
+                continue
 
-    # 2η Προσπάθεια: Gemini Fallback
+    # 2η Προσπάθεια: Gemini SDK Direct
     gem_client = _get_gemini_client(user_api_key)
     if gem_client:
-        models_to_try = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash']
+        models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest']
         full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
         for m_name in models_to_try:
             try:
@@ -69,16 +77,16 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
                 if resp and resp.text:
                     return resp.text
             except Exception as e:
-                last_errors.append(f"{m_name}: {str(e)}")
+                last_errors.append(f"Gemini ({m_name}): {str(e)}")
                 continue
 
     # Αν αποτύχουν όλα
     err_msg = " | ".join(last_errors) if last_errors else "Δεν βρέθηκαν έγκυρα API Keys."
     return (
-        "⚠️ Το ημερήσιο όριο αιτημάτων (Quota) εξαντλήθηκε ή δεν βρέθηκε ενεργό API Key.\n\n"
-        "**Τι μπορείτε να κάνετε:**\n"
-        "1. Βεβαιωθείτε ότι το `OPENROUTER_API_KEY` (ή `DEEPSEEK_API_KEY`) έχει προστεθεί στα Streamlit Secrets.\n"
-        "2. Εισάγετε ένα δικό σας API Key στη Sidebar.\n\n"
+        "⚠️ Εξαντλήθηκαν προσωρινά τα ημερήσια όρια αιτημάτων.\n\n"
+        "**Λύσεις:**\n"
+        "1. Εισάγετε ένα δικό σας Gemini API Key στη Sidebar από το [Google AI Studio](https://aistudio.google.com/).\n"
+        "2. Δοκιμάστε ξανά σε λίγα λεπτά.\n\n"
         f"*(Τεχνική λεπτομέρεια: {err_msg})*"
     )
 
