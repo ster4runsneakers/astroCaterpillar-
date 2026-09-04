@@ -1,4 +1,4 @@
-# ai_engine.py - AstroCaterpillar Unified Engine (Updated Active Free Slugs & Gemini 2.5)
+# ai_engine.py - AstroCaterpillar Unified Engine (OpenRouter Auto-Free Router + Gemini Safe Fallback)
 import os
 import streamlit as st
 from google import genai
@@ -36,34 +36,26 @@ def _get_gemini_client(user_api_key=""):
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
     last_errors = []
 
-    # 1η Προσπάθεια: OpenRouter με ΕΝΕΡΓΑ ΔΩΡΕΑΝ ΜΟΝΤΕΛΑ
+    # 1η Προσπάθεια: OpenRouter AUTO-FREE ROUTER (Επιλέγει αυτόματα διαθέσιμο δωρεάν μοντέλο)
     or_client = _get_openrouter_client(user_api_key)
     if or_client:
-        active_free_or_models = [
-            "google/gemini-2.5-flash:free",
-            "qwen/qwen-2.5-72b-instruct:free",
-            "mistralai/mistral-7b-instruct:free"
-        ]
-        
-        for or_model in active_free_or_models:
-            try:
-                response = or_client.chat.completions.create(
-                    model=or_model,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt}
-                    ],
-                    extra_headers={
-                        "HTTP-Referer": "https://astrocaterpillar.streamlit.app",
-                        "X-Title": "AstroCaterpillar AI"
-                    },
-                    stream=False
-                )
-                if response and response.choices:
-                    return response.choices[0].message.content
-            except Exception as e:
-                last_errors.append(f"OpenRouter ({or_model}): {str(e)}")
-                continue
+        try:
+            response = or_client.chat.completions.create(
+                model="openrouter/free",
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                extra_headers={
+                    "HTTP-Referer": "https://astrocaterpillar.streamlit.app",
+                    "X-Title": "AstroCaterpillar AI"
+                },
+                stream=False
+            )
+            if response and response.choices:
+                return response.choices[0].message.content
+        except Exception as e:
+            last_errors.append(f"OpenRouter Auto: {str(e)}")
 
     # 2η Προσπάθεια: Gemini SDK Direct (gemini-2.5-flash)
     gem_client = _get_gemini_client(user_api_key)
@@ -77,7 +69,7 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
             if resp and resp.text:
                 return resp.text
         except Exception as e:
-            last_errors.append(f"Gemini (gemini-2.5-flash): {str(e)}")
+            last_errors.append(f"Gemini: {str(e)}")
 
     # Αν αποτύχουν όλα
     err_msg = " | ".join(last_errors) if last_errors else "Δεν βρέθηκαν έγκυρα API Keys."
@@ -85,7 +77,7 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
         "⚠️ Εξαντλήθηκαν προσωρινά τα ημερήσια όρια αιτημάτων.\n\n"
         "**Λύσεις:**\n"
         "1. Εισάγετε ένα δικό σας Gemini API Key στη Sidebar από το [Google AI Studio](https://aistudio.google.com/).\n"
-        "2. Περιμένετε 30 δευτερόλεπτα και δοκιμάστε ξανά.\n\n"
+        "2. Δοκιμάστε ξανά σε 1-2 λεπτά.\n\n"
         f"*(Τεχνική λεπτομέρεια: {err_msg})*"
     )
 
