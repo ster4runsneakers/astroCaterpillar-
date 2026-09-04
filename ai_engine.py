@@ -1,4 +1,4 @@
-# ai_engine.py - AstroCaterpillar Unified Engine (Automatic DeepSeek + Gemini Fallback)
+# ai_engine.py - AstroCaterpillar Unified Engine (OpenRouter + Gemini Fallback)
 import os
 import streamlit as st
 from google import genai
@@ -9,48 +9,56 @@ SYSTEM_PROMPT = (
     "Οι αναλύσεις σου είναι αποκλειστικά βασισμένες σε δεδομένα, με ουδέτερο τόνο, χωρίς υπερβολές ή συναισθηματικές φορτίσεις και χωρίς επαναλήψεις."
 )
 
-def _get_deepseek_client(user_api_key=""):
+def _get_openrouter_client(user_api_key=""):
     clean_user_key = user_api_key.strip() if user_api_key else ""
-    if clean_user_key:
-        return OpenAI(api_key=clean_user_key, base_url="https://api.deepseek.com")
+    if clean_user_key and clean_user_key.startswith("sk-or-"):
+        return OpenAI(api_key=clean_user_key, base_url="https://openrouter.ai/api/v1")
     
-    master_key = st.secrets.get("DEEPSEEK_API_KEY", os.getenv("DEEPSEEK_API_KEY", ""))
+    # Έλεγχος στα Secrets για OPENROUTER_API_KEY ή DEEPSEEK_API_KEY
+    master_key = (
+        st.secrets.get("OPENROUTER_API_KEY", "") or 
+        st.secrets.get("DEEPSEEK_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
+    ).strip()
+    
     if master_key:
-        return OpenAI(api_key=master_key, base_url="https://api.deepseek.com")
+        return OpenAI(api_key=master_key, base_url="https://openrouter.ai/api/v1")
     return None
 
 def _get_gemini_client(user_api_key=""):
     clean_user_key = user_api_key.strip() if user_api_key else ""
-    if clean_user_key:
+    if clean_user_key and not clean_user_key.startswith("sk-"):
         return genai.Client(api_key=clean_user_key)
     
-    master_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+    master_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", "")).strip()
     if master_key:
         return genai.Client(api_key=master_key)
     return None
 
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
-    """
-    1. Δοκιμάζει πρώτα το DeepSeek (με το σταθερό Caterpillar prompt).
-    2. Αν αποτύχει ή δεν υπάρχει key, περνάει αυτόματα στο Gemini 2.5 Flash.
-    """
-    # 1η Προσπάθεια: DeepSeek
-    ds_client = _get_deepseek_client(user_api_key)
-    if ds_client:
+    last_errors = []
+
+    # 1η Προσπάθεια: OpenRouter (DeepSeek V3)
+    or_client = _get_openrouter_client(user_api_key)
+    if or_client:
         try:
-            response = ds_client.chat.completions.create(
-                model="deepseek-chat",
+            response = or_client.chat.completions.create(
+                model="deepseek/deepseek-chat",
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
+                extra_headers={
+                    "HTTP-Referer": "https://astrocaterpillar.streamlit.app",
+                    "X-Title": "AstroCaterpillar AI"
+                },
                 stream=False
             )
-            return response.choices[0].message.content
-        except Exception:
-            pass  # Σιωπηρή μετάβαση στο Gemini
+            if response and response.choices:
+                return response.choices[0].message.content
+        except Exception as e:
+            last_errors.append(f"OpenRouter/DeepSeek: {str(e)}")
 
-    # 2η Προσπάθεια: Gemini
+    # 2η Προσπάθεια: Gemini Fallback
     gem_client = _get_gemini_client(user_api_key)
     if gem_client:
         models_to_try = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash']
@@ -58,13 +66,20 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
         for m_name in models_to_try:
             try:
                 resp = gem_client.models.generate_content(model=m_name, contents=full_prompt)
-                return resp.text
-            except Exception:
+                if resp and resp.text:
+                    return resp.text
+            except Exception as e:
+                last_errors.append(f"{m_name}: {str(e)}")
                 continue
 
+    # Αν αποτύχουν όλα
+    err_msg = " | ".join(last_errors) if last_errors else "Δεν βρέθηκαν έγκυρα API Keys."
     return (
-        "🔑 Παρακαλώ εισάγετε ένα API Key (Gemini ή DeepSeek) στη Sidebar "
-        "ή βεβαιωθείτε ότι τα Secrets είναι σωστά ρυθμισμένα."
+        "⚠️ Το ημερήσιο όριο αιτημάτων (Quota) εξαντλήθηκε ή δεν βρέθηκε ενεργό API Key.\n\n"
+        "**Τι μπορείτε να κάνετε:**\n"
+        "1. Βεβαιωθείτε ότι το `OPENROUTER_API_KEY` (ή `DEEPSEEK_API_KEY`) έχει προστεθεί στα Streamlit Secrets.\n"
+        "2. Εισάγετε ένα δικό σας API Key στη Sidebar.\n\n"
+        f"*(Τεχνική λεπτομέρεια: {err_msg})*"
     )
 
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
