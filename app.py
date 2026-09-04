@@ -501,7 +501,7 @@ elif menu_choice.startswith("3."):
                 pos2 = {p: extract_deg(v) for p, v in saved_profiles[p2]["positions"].items()}
                 syn_aspects = calculate_synastry_aspects(pos1, pos2)
                 
-                fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
+                fig, ax = plt.subplots(figsize=(4.2, 4.2), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
                 plot_biwheel_chart(ax, pos1, pos2)
                 st.pyplot(fig)
                 
