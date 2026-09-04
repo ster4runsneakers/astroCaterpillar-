@@ -1,149 +1,123 @@
-# ai_engine.py - AstroCaterpillar Strategic AI Module
+# ai_engine.py - AstroCaterpillar Rich Astrological Persona Engine
 import os
-import streamlit as st
+import google.generativeai as genai
 
-def _call_ai_provider(system_prompt: str, user_prompt: str) -> str:
-    """Εσωτερική συνάρτηση κλήσης του AI παρόχου (Gemini API) με διπλό fallback."""
-    api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-    
+def get_ai_model():
+    """Αναζητά το API Key και αρχικοποιεί το Gemini Model."""
+    api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        return "⚠️ Δεν βρέθηκε API Key (GEMINI_API_KEY) στα secrets του Streamlit."
-
+        return None
     try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=f"{system_prompt}\n\n{user_prompt}"
-        )
+        genai.configure(api_key=api_key)
+        return genai.GenerativeAIModel('gemini-1.5-flash')
+    except Exception:
+        return None
+
+SYSTEM_PERSONA = """
+Είσαι ο AstroCaterpillar, ένας έμπειρος, διεισδυτικός και γλαφυρός αστρολόγος.
+Το ύφος σου συνδυάζει τη βαθιά ψυχολογική και μυθολογική ανάλυση της Ισμήνης Καράλη με την παραστατική, ζεστή και άμεσα εφαρμόσιμη αστρολογική σοφία της Λίτσα Πατέρα.
+
+Κανόνες Γραφής:
+1. Μη δίνεις στεγνούς ορισμούς ή ρομποτικές λίστες.
+2. Συνέθεσε τα στοιχεία (Ζώδια, Οίκους, Όψεις, Στοιχεία) σε μια ρέουσα, ατμοσφαιρική αφήγηση.
+3. Εστίασε στην εσωτερική ψυχολογία, τα κρυφά χαρίσματα, τα διλήμματα της ψυχής και τις καρμικές προκλήσεις.
+4. Χρησιμοποίησε πλούσιο λεξιλόγιο, μεταφορές και ζωντανά παραδείγματα.
+5. Διατήρησε την απάντηση στην αιτούμενη γλώσσα (Ελληνικά ή Αγγλικά).
+"""
+
+def analyze_natal_chart_ai(name, positions, houses, chinese_data, elements, aspects, lang="el"):
+    model = get_ai_model()
+    if not model:
+        return "⚠️ Το GEMINI_API_KEY δεν βρέθηκε στις ρυθμίσεις του Streamlit Cloud."
+    
+    prompt = f"""
+    {SYSTEM_PERSONA}
+    
+    Γλώσσα Απάντησης: {"Ελληνικά" if lang == "el" else "English"}
+    
+    Προφίλ: {name}
+    - Πλανητικές Θέσεις: {positions}
+    - Αιχμές Οίκων: {houses}
+    - Κινεζικό Ζώδιο & Στοιχείο: {chinese_data}
+    - Κατανομή Στοιχείων & Πιοτήτων: {elements}
+    - Γενέθλιες Όψεις: {aspects}
+    
+    Παρακαλώ στείλε μια πλήρη, γλαφυρή και βαθιά ψυχολογική/αστρολογική ανάλυση του χάρτη.
+    Ανάλυσε τον πυρήνα της προσωπικότητας (Ήλιος, Σελήνη, Ωροσκόπος/1ος Οίκος), τις συναισθηματικές ανάγκες, τα ταλέντα, τις εσωτερικές συγκρούσεις (όψεις) και τη συνδυαστική σοφία του Κινεζικού Ζωδίου.
+    """
+    
+    try:
+        response = model.generate_content(prompt)
         return response.text
-    except ImportError:
-        try:
-            import google.generativeai as legacy_genai
-            legacy_genai.configure(api_key=api_key)
-            model = legacy_genai.GenerativeModel('gemini-1.5-pro')
-            response = model.generate_content(f"{system_prompt}\n\n{user_prompt}")
-            return response.text
-        except Exception as e:
-            return f"❌ Σφάλμα κατά την επικοινωνία με το AI: {str(e)}"
     except Exception as e:
-        return f"❌ Σφάλμα κατά την επικοινωνία με το AI: {str(e)}"
+        return f"⚠️ Σφάλμα κατά την παραγωγή της ανάλυσης: {str(e)}"
 
-def analyze_natal_chart_ai(profile_name: str, positions: str, houses: str, chinese: str, stats: str, aspects: str, lang: str = "el") -> str:
-    """Παράγει ψυχογραφική ανάλυση γενέθλιου χάρτη."""
-    if lang == "el":
-        system_prompt = (
-            "Είσαι ο AstroCaterpillar, ένας αναλυτής αστρολογικής στρατηγικής. "
-            "Αναλύεις γενέθλιους χάρτες με βάση δεδομένα, με ουδέτερο, κυνικό και αναλυτικό τόνο, "
-            "χωρίς συναισθηματικές φορτίσεις ή υπερβολές τύπου 'Hollywood'."
-        )
-        user_prompt = f"""
-        Προφίλ: {profile_name}
-        Πλανητικές Θέσεις: {positions}
-        Οίκοι: {houses}
-        Κινεζικό Ζώδιο: {chinese}
-        Στατιστικά Στοιχεία & Τρόποι: {stats}
-        Όψεις: {aspects}
-        
-        Δώσε μια δομημένη ανάλυση με:
-        1. **Ψυχογραφικό Προφίλ & Πυρήνας Προσωπικότητας**
-        2. **Δυνατά Σημεία & Δομικές Αδυναμίες**
-        3. **Στρατηγική Διαχείριση Δυναμικού**
-        """
-    else:
-        system_prompt = (
-            "You are AstroCaterpillar, a data-driven astrology strategist. "
-            "Analyze natal charts objectively, with a neutral and analytical tone."
-        )
-        user_prompt = f"""
-        Profile: {profile_name}
-        Positions: {positions}
-        Houses: {houses}
-        Chinese Zodiac: {chinese}
-        Stats: {stats}
-        Aspects: {aspects}
-        
-        Provide a structured analysis covering Core Psychological Profile, Strengths, Weaknesses, and Strategic Guidance.
-        """
-    return _call_ai_provider(system_prompt, user_prompt)
+def analyze_transits_ai(name, timeframe, transits_data, lang="el"):
+    model = get_ai_model()
+    if not model:
+        return "⚠️ Το GEMINI_API_KEY δεν βρέθηκε."
+    
+    prompt = f"""
+    {SYSTEM_PERSONA}
+    
+    Γλώσσα Απάντησης: {"Ελληνικά" if lang == "el" else "English"}
+    
+    Προφίλ: {name}
+    Χρονική Περίοδος: {timeframe}
+    Δεδομένα Διελεύσεων: {transits_data}
+    
+    Κάνε μια ζωντανή, προγνωστική και συμβουλευτική ανάλυση για τον μήνα αυτό.
+    Ξεχώρισε τις μεγάλες, κοσμικές τάσεις των αργών πλανητών (μακρο-κύκλοι) και πώς επηρεάζουν την ψυχολογία, τα επαγγελματικά και τις σχέσεις του ατόμου.
+    """
+    
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"⚠️ Σφάλμα: {str(e)}"
 
-def analyze_synastry_ai(p1_name: str, p2_name: str, aspects_str: str, lang: str = "el") -> str:
-    """Παράγει ανάλυση συναστρίας 2 ατόμων."""
-    if lang == "el":
-        system_prompt = (
-            "Είσαι ο AstroCaterpillar. Αναλύεις συναστρίες σχέσεων με βάση τα πραγματικά δεδομένα των όψεων, "
-            "με κυνική ειλικρίνεια και εστίαση στη δυναμική αλληλεπίδρασης."
-        )
-        user_prompt = f"""
-        Συναστρία μεταξύ: {p1_name} και {p2_name}
-        Όψεις Συναστρίας: {aspects_str}
-        
-        Δώσε μια αναφορά με:
-        1. **Σημεία Σύγκλισης & Αμοιβαίας Ενίσχυσης**
-        2. **Πεδίο Τριβών & Δομικών Προκλήσεων**
-        3. **Μακροπρόθεσμη Βιωσιμότητα Σχέσης**
-        """
-    else:
-        system_prompt = (
-            "You are AstroCaterpillar. Analyze synastry data objectively and analytically."
-        )
-        user_prompt = f"""
-        Synastry between: {p1_name} and {p2_name}
-        Aspects: {aspects_str}
-        
-        Provide analysis on Mutual Dynamics, Friction Points, and Long-Term Compatibility.
-        """
-    return _call_ai_provider(system_prompt, user_prompt)
+def analyze_synastry_ai(p1_name, p2_name, aspects_data, lang="el"):
+    model = get_ai_model()
+    if not model:
+        return "⚠️ Το GEMINI_API_KEY δεν βρέθηκε."
+    
+    prompt = f"""
+    {SYSTEM_PERSONA}
+    
+    Γλώσσα Απάντησης: {"Ελληνικά" if lang == "el" else "English"}
+    
+    Συναστρία μεταξύ {p1_name} και {p2_name}
+    Όψεις Συναστρίας: {aspects_data}
+    
+    Ανάλυσε τη χημεία, την ερωτική/συναισθηματική έλξη, τα σημεία τριβής και το καρμικό μάθημα αυτής της σχέσης με γλαφυρό, διαισθητικό και βαθύ τρόπο.
+    """
+    
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"⚠️ Σφάλμα: {str(e)}"
 
-def analyze_transits_ai(profile_name: str, timeframe_str: str, transits_data_str: str, lang: str = "el") -> str:
-    """Παράγει στρατηγική μηνιαία ανάλυση διελεύσεων."""
-    if lang == "el":
-        system_prompt = (
-            "Είσαι ο AstroCaterpillar, ένας αναλυτής αστρολογικής στρατηγικής. "
-            "Αναλύεις τις μηνιαίες διελεύσεις με βάση τα πραγματικά δεδομένα, χωρίς μελοδραματισμούς, "
-            "με ουδέτερο και αναλυτικό τόνο. "
-            "Διαχώρισε τις μακροπρόθεσμες τάσεις (αργοί πλανήτες) από τους ημερήσιους πυροκροτητές (γρήγοροι πλανήτες)."
-        )
-        user_prompt = f"""
-        Προφίλ: {profile_name}
-        Περίοδος Ανάλυσης: {timeframe_str}
-        
-        Δεδομένα Διελεύσεων (Όψεις):
-        {transits_data_str}
-        
-        Δώσε μια δομημένη μηνιαία αναφορά με την εξής δομή:
-        1. **Κυρίαρχο Μακρο-Πλαίσιο (Macro Trends):** Οι επιδράσεις των αργών πλανητών (Δίας, Κρόνος, Ουρανός, Ποσειδώνας, Πλούτωνας). Τι τομείς πιέζουν ή ξεκλειδώνουν.
-        2. **Πυροκροτητές & Κρίσιμες Ημέρες (Triggers):** Πότε οι γρήγοροι πλανήτες ενεργοποιούν τα μακρο-σενάρια μέσα στον μήνα.
-        3. **Τακτική Διαχείριση (Strategic Action):** Συγκεκριμένες, ψύχραιμες οδηγίες για τη βέλτιστη διαχείριση ρίσκου και ευκαιριών.
-        """
-    else:
-        system_prompt = (
-            "You are AstroCaterpillar, an astrological strategy analyst. "
-            "Analyze monthly transits neutrally and objectively. "
-            "Separate macro-level planetary cycles from short-term triggers."
-        )
-        user_prompt = f"""
-        Profile: {profile_name}
-        Timeframe: {timeframe_str}
-        
-        Transit Data (Aspects):
-        {transits_data_str}
-        
-        Provide a structured monthly report:
-        1. **Macro Framework (Outer Planets):** Structural shifts and high-impact cycles.
-        2. **Triggers & Key Dates:** How inner planets activate the macro trends.
-        3. **Strategic Action:** Data-driven advice for risk management and opportunity.
-        """
-    return _call_ai_provider(system_prompt, user_prompt)
-
-def ask_caterpillar_chat(report_context: str, question: str, lang: str = "el") -> str:
-    """Απαντά σε ερωτήσεις χρήστη πάνω σε παραχθείσα ανάλυση."""
-    system_prompt = "Είσαι ο AstroCaterpillar. Απάντησε σύντομα, με ακρίβεια και βάση τα δεδομένα της ανάλυσης."
-    user_prompt = f"Πλαίσιο Ανάλυσης:\n{report_context}\n\nΕρώτηση Χρήστη: {question}"
-    return _call_ai_provider(system_prompt, user_prompt)
+def ask_caterpillar_chat(previous_report, question, lang="el"):
+    model = get_ai_model()
+    if not model:
+        return "⚠️ Το GEMINI_API_KEY δεν βρέθηκε."
+    
+    prompt = f"""
+    {SYSTEM_PERSONA}
+    
+    Γλώσσα: {"Ελληνικά" if lang == "el" else "English"}
+    Προηγούμενη Ανάλυση: {previous_report}
+    Ερώτηση Χρήστη: {question}
+    
+    Απάντησε με ζεστό, κατατοπιστικό και αστρολογικά τεκμηριωμένο ύφος.
+    """
+    
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"⚠️ Σφάλμα: {str(e)}"
 
 def clear_ai_cache():
-    """Καθαρίζει τα αποθηκευμένα αποτελέσματα AI από το session state."""
-    keys_to_del = [k for k in st.session_state.keys() if k.startswith("natal_ai_")]
-    for k in keys_to_del:
-        del st.session_state[k]
+    pass
