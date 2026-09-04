@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Includes Complete Reference Guide)
+# app.py - AstroCaterpillar Micro-App (Includes Percentage Interpretation Guide)
 import datetime
 import json
 import sqlite3
@@ -355,6 +355,15 @@ if menu_choice.startswith("1."):
             "Στοιχεία / Elements": elements_bilingual,
             "Ποιότητες / Modalities": modalities_bilingual
         })
+        
+        # ΠΡΟΣΘΗΚΗ: Επεξηγηματικό expander για τα ποσοστά
+        with st.expander("💡 Πώς διαβάζονται τα Ποσοστά (%)", expanded=False):
+            st.markdown("""
+            * **Υψηλό Ποσοστό (π.χ. >30%):** Δείχνει το **κυρίαρχο στοιχείο/ποιότητα**. Εκεί διοχετεύεται αβίαστα η μεγαλύτερη ενέργεια του ατόμου.
+            * **Χαμηλό Ποσοστό (π.χ. <15%):** Δείχνει έναν τομέα που χρειάζεται συνειδητή προσπάθεια και εξάσκηση για να ισορροπήσει.
+            * **Στοιχεία:** Πυρ (Δράση/Πάθος), Γη (Σταθερότητα/Πρακτικότητα), Αέρας (Σκέψη/Επικοινωνία), Νερό (Συναίσθημα/Διαίσθηση).
+            * **Ποιότητες:** Παρορμητικά (Πρωτοβουλία/Εκκίνηση), Σταθερά (Διατήρηση/Θεμελίωση), Μεταβλητά (Προσαρμογή/Εξέλιξη).
+            """)
         
         with st.expander("🏠 Αιχμές 12 Οίκων / House Cusps (12)", expanded=False):
             houses_formatted = {}
