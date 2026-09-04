@@ -4,10 +4,11 @@ import re
 from datetime import datetime
 from weasyprint import HTML
 
-from ai_engine import analyze_natal_chart_ai
+from ai_engine import analyze_natal_chart_ai, analyze_synastry_ai
 from ephemeris_engine import calculate_houses
 from elements_engine import calculate_elements_and_modalities
 from natal_aspects_engine import calculate_natal_aspects
+from synastry_engine import calculate_synastry_aspects
 from chinese_astrology import get_chinese_zodiac
 from interpretations_el import get_sign_from_degrees
 from cities_el import GREEK_AND_WORLD_CITIES, ZODIAC_SIGNS, PLANET_TRANSLATIONS
@@ -95,90 +96,19 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
         <meta charset="UTF-8">
         <title>{t_title}</title>
         <style>
-            *, *::before, *::after {{
-                box-sizing: border-box;
-            }}
-            @page {{
-                size: A4;
-                margin: 20mm 15mm;
-                background-color: #0f172a;
-            }}
-            body {{
-                margin: 0;
-                padding: 0;
-                font-family: 'Helvetica Neue', Arial, sans-serif;
-                color: #f1f5f9;
-                line-height: 1.6;
-                font-size: 10.5pt;
-            }}
-            .cover-header {{
-                border-bottom: 3px solid #6366f1;
-                padding-bottom: 15px;
-                margin-bottom: 25px;
-            }}
-            h1 {{
-                font-size: 24pt;
-                color: #818cf8;
-                margin: 0 0 10px 0;
-                letter-spacing: -0.5px;
-            }}
-            .meta-info {{
-                font-size: 9.5pt;
-                color: #94a3b8;
-                background-color: #1e293b;
-                padding: 10px 14px;
-                border-radius: 6px;
-            }}
-            h2 {{
-                font-size: 14pt;
-                color: #a5b4fc;
-                border-left: 5px solid #6366f1;
-                padding-left: 10px;
-                margin-top: 25px;
-                margin-bottom: 12px;
-                page-break-after: avoid;
-            }}
-            h3 {{
-                font-size: 11.5pt;
-                color: #c7d2fe;
-                margin-top: 15px;
-                margin-bottom: 6px;
-                page-break-after: avoid;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 20px;
-                background-color: #1e293b;
-                border-radius: 6px;
-                overflow: hidden;
-            }}
-            th {{
-                background-color: #312e81;
-                color: #e0e7ff;
-                text-align: left;
-                padding: 8px 12px;
-                font-size: 9.5pt;
-            }}
-            td {{
-                padding: 7px 12px;
-                border-bottom: 1px solid #334155;
-                font-size: 9.5pt;
-            }}
-            .analysis-text {{
-                background-color: #1e293b;
-                padding: 18px 20px;
-                border-radius: 8px;
-                border: 1px solid #334155;
-            }}
-            .footer {{
-                text-align: center;
-                font-size: 8pt;
-                color: #64748b;
-                margin-top: 30px;
-                border-top: 1px solid #334155;
-                padding-top: 10px;
-            }}
+            *, *::before, *::after {{ box-sizing: border-box; }}
+            @page {{ size: A4; margin: 20mm 15mm; background-color: #0f172a; }}
+            body {{ margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; color: #f1f5f9; line-height: 1.6; font-size: 10.5pt; }}
+            .cover-header {{ border-bottom: 3px solid #6366f1; padding-bottom: 15px; margin-bottom: 25px; }}
+            h1 {{ font-size: 24pt; color: #818cf8; margin: 0 0 10px 0; letter-spacing: -0.5px; }}
+            .meta-info {{ font-size: 9.5pt; color: #94a3b8; background-color: #1e293b; padding: 10px 14px; border-radius: 6px; }}
+            h2 {{ font-size: 14pt; color: #a5b4fc; border-left: 5px solid #6366f1; padding-left: 10px; margin-top: 25px; margin-bottom: 12px; page-break-after: avoid; }}
+            h3 {{ font-size: 11.5pt; color: #c7d2fe; margin-top: 15px; margin-bottom: 6px; page-break-after: avoid; }}
+            table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: #1e293b; border-radius: 6px; overflow: hidden; }}
+            th {{ background-color: #312e81; color: #e0e7ff; text-align: left; padding: 8px 12px; font-size: 9.5pt; }}
+            td {{ padding: 7px 12px; border-bottom: 1px solid #334155; font-size: 9.5pt; }}
+            .analysis-text {{ background-color: #1e293b; padding: 18px 20px; border-radius: 8px; border: 1px solid #334155; }}
+            .footer {{ text-align: center; font-size: 8pt; color: #64748b; margin-top: 30px; border-top: 1px solid #334155; padding-top: 10px; }}
         </style>
     </head>
     <body>
@@ -221,7 +151,8 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
     HTML(string=html_content).write_pdf(pdf_buffer)
     return pdf_buffer.getvalue()
 
-  def create_synastry_ebook(person1_name: str, person2_name: str, prof1_data: dict, prof2_data: dict, lang: str = "el") -> bytes:
+
+def create_synastry_ebook(person1_name: str, person2_name: str, prof1_data: dict, prof2_data: dict, lang: str = "el") -> bytes:
     """Παράγει ένα πλήρες Ebook PDF για τη Συναστρία 2 ατόμων."""
     pos1 = prof1_data.get("positions", {})
     pos2 = prof2_data.get("positions", {})
@@ -268,7 +199,7 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
 
     # Πίνακας Όψεων
     rows_html = ""
-    for asp in syn_aspects[:15]:  # Προβολή των 15 σημαντικότερων όψεων
+    for asp in syn_aspects[:15]:
         p1_clean = asp['p1'].replace("Person1_", "")
         p2_clean = asp['p2'].replace("Person2_", "")
         p1_display = PLANET_TRANSLATIONS.get(p1_clean, {}).get(lang, p1_clean)
@@ -343,4 +274,3 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
     pdf_buffer = io.BytesIO()
     HTML(string=html_content).write_pdf(pdf_buffer)
     return pdf_buffer.getvalue()
-
