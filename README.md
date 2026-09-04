@@ -42,6 +42,12 @@
 
 ---
 
+📜 Άδεια Χρήσης & Φιλοσοφία / License & Philosophy
+[EL] Η εφαρμογή αναπτύχθηκε με γνώμονα την προσωπική αυτονομία (Self-Custody), την ακρίβεια των δεδομένων και την αποφυγή περιττού θορύβου.
+
+[EN] Developed with Data Sovereignty (Self-Custody) at its core, prioritizing analytical rigor, data accuracy, and user autonomy.
+
+
 ## 🚀 Οδηγίες Εγκατάστασης & Εκτέλεσης / Quick Start
 
 ### 1. Clone the Repository
@@ -49,7 +55,3 @@
 git clone [https://github.com/your-username/AstroCaterpillar.git](https://github.com/your-username/AstroCaterpillar.git)
 cd AstroCaterpillar
 
-📜 Άδεια Χρήσης & Φιλοσοφία / License & Philosophy
-[EL] Η εφαρμογή αναπτύχθηκε με γνώμονα την προσωπική αυτονομία (Self-Custody), την ακρίβεια των δεδομένων και την αποφυγή περιττού θορύβου.
-
-[EN] Developed with Data Sovereignty (Self-Custody) at its core, prioritizing analytical rigor, data accuracy, and user autonomy.
