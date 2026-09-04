@@ -1,0 +1,6 @@
+streamlit
+matplotlib
+numpy
+google-genai
+requests
+weasyprint
