@@ -24,36 +24,67 @@ def extract_planet_info(val):
         return deg, is_retro
     return float(val), False
 
-# --- PLOTLY INTERACTIVE CHART (WITH HOUSES NUMBERS, RETROGRADE & OVERLAP HANDLING) ---
-def create_interactive_natal_plotly(positions: dict, houses: dict = None):
+# --- PLOTLY INTERACTIVE CHART (WITH BILINGUAL TOOLTIPS) ---
+PLANET_NAMES_BILINGUAL = {
+    "el": {
+        "Sun": "Ήλιος (Sun)", "Moon": "Σελήνη (Moon)", "Mercury": "Ερμής (Mercury)",
+        "Venus": "Αφροδίτη (Venus)", "Mars": "Άρης (Mars)", "Jupiter": "Δίας (Jupiter)",
+        "Saturn": "Κρόνος (Saturn)", "Uranus": "Ουρανός (Uranus)", 
+        "Neptune": "Ποσειδώνας (Neptune)", "Pluto": "Πλούτωνας (Pluto)"
+    },
+    "en": {
+        "Sun": "Sun", "Moon": "Moon", "Mercury": "Mercury",
+        "Venus": "Venus", "Mars": "Mars", "Jupiter": "Jupiter",
+        "Saturn": "Saturn", "Uranus": "Uranus", 
+        "Neptune": "Neptune", "Pluto": "Pluto"
+    }
+}
+
+ZODIAC_NAMES_EN = [
+    "Aries", "Taurus", "Gemini", "Cancer",
+    "Leo", "Virgo", "Libra", "Scorpio",
+    "Sagittarius", "Capricorn", "Aquarius", "Pisces"
+]
+
+def create_interactive_natal_plotly(positions: dict, houses: dict = None, lang: str = "el"):
     fig = go.Figure()
 
-    # 1. Ζώδια στον εξωτερικό δακτύλιο με Tooltips
+    z_names = ZODIAC_NAMES_EL if lang == "el" else ZODIAC_NAMES_EN
+    p_names = PLANET_NAMES_BILINGUAL.get(lang, PLANET_NAMES_BILINGUAL["en"])
+
+    # 1. Ζώδια στον εξωτερικό δακτύλιο
     z_angles = [i * 30 + 15 for i in range(12)]
+    z_label = "<b>Ζώδιο:</b>" if lang == "el" else "<b>Sign:</b>"
+    
     fig.add_trace(go.Scatterpolar(
         r=[1.15] * 12,
         theta=z_angles,
         mode='text',
         text=ZODIAC_SYMBOLS,
         hoverinfo='text',
-        hovertext=[f"<b>Ζώδιο:</b> {name}" for name in ZODIAC_NAMES_EL],
+        hovertext=[f"{z_label} {name}" for name in z_names],
         textfont=dict(size=18, color='#60A5FA'),
-        name="Ζώδια"
+        showlegend=False
     ))
 
-    # 2. Πλανήτες με διαχείριση επικαλύψεων (Offset)
+    # 2. Πλανήτες με δυναμική γλώσσα
     sorted_planets = sorted(positions.items(), key=lambda x: extract_planet_info(x[1])[0])
-    
     p_r, p_theta, p_text, p_hover, p_color = [], [], [], [], []
-    
     prev_deg = -999
     current_radius = 0.85
 
     for planet, val in sorted_planets:
         deg, is_retro = extract_planet_info(val)
         symbol = PLANET_SYMBOLS.get(planet, planet[:2])
-        status = "Ανάδρομος (R)" if is_retro else "Ορθόδρομος"
+        planet_display = p_names.get(planet, planet)
         
+        if lang == "el":
+            status = "Ανάδρομος (R)" if is_retro else "Ορθόδρομος"
+            hover_txt = f"<b>{planet_display}</b> ({symbol})<br><b>Μοίρα:</b> {deg:.2f}°<br><b>Κατάσταση:</b> {status}"
+        else:
+            status = "Retrograde (R)" if is_retro else "Direct"
+            hover_txt = f"<b>{planet_display}</b> ({symbol})<br><b>Degree:</b> {deg:.2f}°<br><b>Status:</b> {status}"
+
         if abs(deg - prev_deg) < 5.0 or abs(deg - prev_deg) > 355.0:
             current_radius = 0.72 if current_radius == 0.85 else 0.85
         else:
@@ -65,7 +96,7 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
         p_r.append(current_radius)
         p_theta.append(deg)
         p_text.append(display_text)
-        p_hover.append(f"<b>{planet}</b> ({symbol})<br><b>Μοίρα:</b> {deg:.2f}°<br><b>Κατάσταση:</b> {status}")
+        p_hover.append(hover_txt)
         p_color.append('#EF4444' if is_retro else '#F59E0B')
 
     fig.add_trace(go.Scatterpolar(
@@ -78,18 +109,18 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
         textposition="top center",
         marker=dict(size=10, color=p_color),
         textfont=dict(size=13, color='#F3F4F6'),
-        name="Πλανήτες"
+        showlegend=False
     ))
 
-    # 3. Αιχμές & Αριθμοί 12 Οίκων (1-12) στο εσωτερικό
+    # 3. Αιχμές & Αριθμοί 12 Οίκων
     if houses and len(houses) >= 12:
         house_degs = [houses.get(f"House_{i}", (i-1)*30) for i in range(1, 13)]
+        house_lbl = "ος Οίκος" if lang == "el" else "th House"
         
         for i in range(12):
             deg_start = house_degs[i]
             deg_end = house_degs[(i + 1) % 12]
             
-            # Γραμμή αιχμής
             fig.add_trace(go.Scatterpolar(
                 r=[0, 1.05],
                 theta=[deg_start, deg_start],
@@ -99,7 +130,6 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
                 showlegend=False
             ))
             
-            # Υπολογισμός μέσης γωνίας για τοποθέτηση του αριθμού του Οίκου στο κέντρο (r = 0.38)
             diff = (deg_end - deg_start) % 360.0
             mid_deg = (deg_start + diff / 2.0) % 360.0
             
@@ -109,7 +139,7 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None):
                 mode='text',
                 text=[str(i + 1)],
                 hoverinfo='text',
-                hovertext=[f"<b>{i+1}ος Οίκος</b>"],
+                hovertext=[f"<b>{i+1}{house_lbl}</b>"],
                 textfont=dict(size=11, color='#9CA3AF', weight='bold'),
                 showlegend=False
             ))
