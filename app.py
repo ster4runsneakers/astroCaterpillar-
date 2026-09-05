@@ -8,6 +8,27 @@ import matplotlib.pyplot as plt
 # --- INTERNAL IMPORTS ---
 from cities_el import GREEK_AND_WORLD_CITIES, ZODIAC_SIGNS, PLANET_TRANSLATIONS
 from ephemeris_engine import calculate_natal_positions, calculate_houses
+
+
+def safe_natal_positions(year, month, day, hour_decimal, tz_name="Europe/Athens"):
+    try:
+        return calculate_natal_positions(year, month, day, hour_decimal, tz_name=tz_name)
+    except TypeError:
+        return calculate_natal_positions(year, month, day, hour_decimal)
+
+
+def safe_houses(year, month, day, hour_decimal, lat, lon, tz_name=None):
+    try:
+        return calculate_houses(year, month, day, hour_decimal, lat, lon, tz_name=tz_name)
+    except TypeError:
+        return calculate_houses(year, month, day, hour_decimal, lat, lon)
+
+
+def safe_chinese_zodiac(year, month=6, day=15):
+    try:
+        return get_chinese_zodiac(year, month, day)
+    except TypeError:
+        return get_chinese_zodiac(year)
 from interpretations_el import get_sign_from_degrees
 from elements_engine import calculate_elements_and_modalities
 from natal_aspects_engine import calculate_natal_aspects
@@ -266,7 +287,7 @@ if selected_profile == new_prof_label:
             if new_name.strip():
                 hour_decimal = new_time.hour + (new_time.minute / 60.0)
                 tz_name = GREEK_AND_WORLD_CITIES.get(selected_city_key, {}).get("tz", "Europe/Athens")
-                pos = calculate_natal_positions(
+                pos = safe_natal_positions(
                     new_date.year, new_date.month, new_date.day, hour_decimal, tz_name=tz_name
                 )
                 
@@ -335,13 +356,13 @@ if menu_choice.startswith("1."):
     tz_name = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("tz", "Europe/Athens")
 
     local_hour_decimal = b_time.hour + (b_time.minute / 60.0)
-    houses = calculate_houses(
+    houses = safe_houses(
         b_date.year, b_date.month, b_date.day, local_hour_decimal, lat, lon, tz_name=tz_name
     )
     positions_signs = {p: get_sign_from_degrees(deg)[0] for p, deg in natal_pos.items()}
     elements_pct, modalities_pct = calculate_elements_and_modalities(positions_signs)
     aspects = calculate_natal_aspects(natal_pos)
-    cz_data = get_chinese_zodiac(b_date.year, b_date.month, b_date.day)
+    cz_data = safe_chinese_zodiac(b_date.year, b_date.month, b_date.day)
 
     cz_animal_raw = cz_data.get('animal', '')
     cz_element_raw = cz_data.get('element', '')
