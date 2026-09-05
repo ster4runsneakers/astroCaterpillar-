@@ -350,6 +350,28 @@ if menu_choice.startswith("1."):
         st.subheader("📊 Βασικοί Δείκτες / Key Indicators")
         st.write(f"**Ημερομηνία / Date:** {b_date.strftime('%d/%m/%Y')} {b_time.strftime('%H:%M')} ({city_name_el} / {city_name_en})")
         
+        # --- ΝΕΟ ΠΛΑΙΣΙΟ: Η ΑΣΤΡΟΛΟΓΙΚΗ ΤΡΙΑΔΑ ---
+        sun_deg = natal_pos.get("Sun", 0.0)
+        moon_deg = natal_pos.get("Moon", 0.0)
+        asc_deg = houses.get("House_1", 0.0)
+        
+        sun_sign_en, _ = get_sign_from_degrees(sun_deg)
+        moon_sign_en, _ = get_sign_from_degrees(moon_deg)
+        asc_sign_en, _ = get_sign_from_degrees(asc_deg)
+        
+        sun_sign_el = ZODIAC_SIGNS.get(sun_sign_en, {}).get("el", sun_sign_en)
+        moon_sign_el = ZODIAC_SIGNS.get(moon_sign_en, {}).get("el", moon_sign_en)
+        asc_sign_el = ZODIAC_SIGNS.get(asc_sign_en, {}).get("el", asc_sign_en)
+
+        st.markdown("""
+        <div style="background-color: #1E293B; border-left: 4px solid #3B82F6; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+            <h4 style="margin: 0 0 8px 0; color: #F8FAFC;">✨ Θεμελιώδης Τριάδα</h4>
+            <p style="margin: 4px 0; color: #E2E8F0;">☀️ <b>Ήλιος:</b> {}</p>
+            <p style="margin: 4px 0; color: #E2E8F0;">🌙 <b>Σελήνη:</b> {}</p>
+            <p style="margin: 4px 0; color: #E2E8F0;">🌅 <b>Ωροσκόπος:</b> {}</p>
+        </div>
+        """.format(f"{sun_sign_el} ({sun_sign_en})", f"{moon_sign_el} ({moon_sign_en})", f"{asc_sign_el} ({asc_sign_en})"), unsafe_allow_html=True)
+
         st.info(f"🐉 **Κινεζικό Ζώδιο / Chinese Zodiac:** {cz_animal_bi} ({cz_element_bi})")
         
         elements_bilingual = {ELEMENT_TRANSLATIONS.get(k, k): v for k, v in elements_pct.items()}
