@@ -74,5 +74,7 @@ PLANET_TRANSLATIONS = {
     "Saturn": {"el": "Κρόνος", "en": "Saturn"},
     "Uranus": {"el": "Ουρανός", "en": "Uranus"},
     "Neptune": {"el": "Ποσειδώνας", "en": "Neptune"},
-    "Pluto": {"el": "Πλούτωνας", "en": "Pluto"}
+    "Pluto": {"el": "Πλούτωνας", "en": "Pluto"},
+    "North Node": {"el": "Βόρειος Δεσμός", "en": "North Node"},
+    "Chiron": {"el": "Χείρων", "en": "Chiron"},
 }
