@@ -115,8 +115,12 @@ def _positions_swe(year, month, day, hour_decimal, tz_name=DEFAULT_TZ):
         "Sun": swe.SUN, "Moon": swe.MOON, "Mercury": swe.MERCURY,
         "Venus": swe.VENUS, "Mars": swe.MARS, "Jupiter": swe.JUPITER,
         "Saturn": swe.SATURN, "Uranus": swe.URANUS, "Neptune": swe.NEPTUNE,
-        "Pluto": swe.PLUTO,
+        "Pluto": swe.PLUTO, "North Node": swe.TRUE_NODE,
     }
+    try:
+        bodies["Chiron"] = swe.CHIRON
+    except Exception:
+        pass
     positions = {}
     for name, body in bodies.items():
         xx, _ret = swe.calc_ut(jd_ut, body)
