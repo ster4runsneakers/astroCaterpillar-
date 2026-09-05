@@ -139,7 +139,8 @@ MODALITIES_GUIDE = {
 st.set_page_config(
     page_title="AstroCaterpillar AI",
     page_icon="🐛",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown("""
@@ -154,7 +155,18 @@ html, body, [class*="css"] { font-family: 'Source Sans 3', sans-serif; }
   color: #E2E8F0;
 }
 .block-container { padding-top: 1.4rem; padding-bottom: 2.5rem; max-width: 1280px; }
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
+header { visibility: visible !important; }
+[data-testid="stHeader"] {
+  background: rgba(7,11,20,.88) !important;
+  backdrop-filter: blur(8px);
+}
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapsedControl"] {
+  visibility: visible !important;
+  display: flex !important;
+  color: #93C5FD !important;
+}
 [data-testid="stSidebar"] {
   background: linear-gradient(180deg, #0C1524 0%, #0A101C 100%);
   border-right: 1px solid rgba(148,163,184,.12);
@@ -308,6 +320,74 @@ if "guest_profiles" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = {}
 
+def collect_and_save_profile(key_prefix="sb"):
+    """Φόρμα νέου προφίλ — ίδια στη sidebar και στην αρχική (για κινητά)."""
+    new_name = st.text_input("Όνομα / Αρχικά", key=f"{key_prefix}_name")
+    new_date = st.date_input(
+        "Ημερομηνία Γέννησης",
+        value=datetime.date(1990, 1, 1),
+        min_value=datetime.date(1900, 1, 1),
+        max_value=datetime.date.today(),
+        key=f"{key_prefix}_date",
+    )
+    unknown_time = st.checkbox(
+        "Δεν γνωρίζω ώρα γέννησης",
+        key=f"{key_prefix}_unk",
+    )
+    new_time = st.time_input(
+        "Ώρα Γέννησης",
+        datetime.time(12, 0),
+        disabled=unknown_time,
+        key=f"{key_prefix}_time",
+    )
+    city_filter = st.text_input("Αναζήτηση πόλης", key=f"{key_prefix}_cityq")
+    city_keys = list(GREEK_AND_WORLD_CITIES.keys())
+    if city_filter.strip():
+        q = city_filter.strip().lower()
+        city_keys = [
+            k for k in city_keys
+            if q in k.lower()
+            or q in GREEK_AND_WORLD_CITIES[k].get("el", "").lower()
+            or q in GREEK_AND_WORLD_CITIES[k].get("en", "").lower()
+        ] or list(GREEK_AND_WORLD_CITIES.keys())
+    city_options = {
+        k: f"{GREEK_AND_WORLD_CITIES[k]['el']} / {GREEK_AND_WORLD_CITIES[k]['en']}"
+        for k in city_keys
+    }
+    default_ix = city_keys.index("Athens") if "Athens" in city_keys else 0
+    selected_city_key = st.selectbox(
+        "Πόλη Γέννησης",
+        options=city_keys,
+        format_func=lambda x: city_options[x],
+        index=default_ix,
+        key=f"{key_prefix}_city",
+    )
+    if st.button("💾 Υπολογισμός Χάρτη", key=f"{key_prefix}_go"):
+        if not new_name.strip():
+            st.error("Γράψε ένα όνομα ή αρχικά.")
+            return False
+        if unknown_time:
+            new_time = datetime.time(12, 0)
+        hour_decimal = new_time.hour + (new_time.minute / 60.0)
+        tz_name = GREEK_AND_WORLD_CITIES.get(selected_city_key, {}).get("tz", "Europe/Athens")
+        pos = safe_natal_positions(
+            new_date.year, new_date.month, new_date.day, hour_decimal, tz_name=tz_name
+        )
+        if st.session_state.is_admin:
+            save_profile_to_db(new_name.strip(), new_date, new_time, selected_city_key, pos)
+        else:
+            st.session_state.guest_profiles[new_name.strip()] = {
+                "date": new_date,
+                "time": new_time,
+                "city": selected_city_key,
+                "positions": pos,
+                "unknown_time": unknown_time,
+            }
+        st.success("Ο χάρτης υπολογίστηκε.")
+        st.rerun()
+    return True
+
+
 # --- LANGUAGE SELECTOR ---
 st.sidebar.title("🐛 AstroCaterpillar")
 lang_choice = st.sidebar.selectbox("🌐 Γλώσσα / Language", ["Ελληνικά", "English"])
@@ -332,58 +412,8 @@ selected_profile = st.sidebar.selectbox(
 )
 
 if selected_profile == new_prof_label:
-    exp_title = "➕ Προσθήκη Προφίλ / Add Profile"
-    with st.sidebar.expander(exp_title, expanded=True):
-        new_name = st.text_input("Όνομα / Αρχικά (Name / Initials):")
-        new_date = st.date_input(
-            "Ημερομηνία Γέννησης / Birth Date:",
-            value=datetime.date(1990, 1, 1),
-            min_value=datetime.date(1900, 1, 1),
-            max_value=datetime.date.today()
-        )
-        unknown_time = st.checkbox("Δεν γνωρίζω ώρα γέννησης / Unknown birth time (solar chart)")
-        new_time = st.time_input("Ώρα Γέννησης / Birth Time:", datetime.time(12, 0), disabled=unknown_time)
-
-        city_filter = st.text_input("Αναζήτηση πόλης / Filter city:", "")
-        city_keys = list(GREEK_AND_WORLD_CITIES.keys())
-        if city_filter.strip():
-            q = city_filter.strip().lower()
-            city_keys = [
-                k for k in city_keys
-                if q in k.lower()
-                or q in GREEK_AND_WORLD_CITIES[k].get("el", "").lower()
-                or q in GREEK_AND_WORLD_CITIES[k].get("en", "").lower()
-            ] or list(GREEK_AND_WORLD_CITIES.keys())
-        city_options = {k: f"{GREEK_AND_WORLD_CITIES[k]['el']} / {GREEK_AND_WORLD_CITIES[k]['en']}" for k in city_keys}
-        selected_city_key = st.selectbox(
-            "Πόλη Γέννησης / Birth City:",
-            options=city_keys,
-            format_func=lambda x: city_options[x],
-            index=city_keys.index("Athens") if "Athens" in city_keys else 0
-        )
-        
-        btn_save = "💾 Υπολογισμός Χάρτη / Calculate Chart"
-        if st.button(btn_save):
-            if new_name.strip():
-                hour_decimal = new_time.hour + (new_time.minute / 60.0)
-                tz_name = GREEK_AND_WORLD_CITIES.get(selected_city_key, {}).get("tz", "Europe/Athens")
-                pos = safe_natal_positions(
-                    new_date.year, new_date.month, new_date.day, hour_decimal, tz_name=tz_name
-                )
-                
-                if unknown_time:
-                    new_time = datetime.time(12, 0)
-                if st.session_state.is_admin:
-                    save_profile_to_db(new_name.strip(), new_date, new_time, selected_city_key, pos)
-                else:
-                    st.session_state.guest_profiles[new_name.strip()] = {
-                        "date": new_date, "time": new_time, "city": selected_city_key,
-                        "positions": pos, "unknown_time": unknown_time
-                    }
-                st.success("OK!")
-                st.rerun()
-            else:
-                st.error("Παρακαλώ εισάγετε όνομα / Please enter a name.")
+    with st.sidebar.expander("➕ Προσθήκη Προφίλ / Add Profile", expanded=True):
+        collect_and_save_profile("sb")
 else:
     st.sidebar.info(f"**{selected_profile}**")
     btn_del = "🗑️ Αφαίρεση Προφίλ / Remove Profile"
@@ -454,7 +484,7 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
       <h1 class="ac-title">🐛 AstroCaterpillar</h1>
       <p class="ac-sub">
         Γενέθλιος χάρτης, διελεύσεις και συναστρία — με ακρίβεια επιμεληρίου και αφήγηση AI.
-        Τα δεδομένα μένουν στη συσκευή σου. Ξεκίνα από την αριστερή στήλη.
+        Τα δεδομένα μένουν στη συσκευή σου. Στο κινητό συμπλήρωσε τη φόρμα από κάτω — ή πάτα το βελάκι πάνω αριστερά για το μενού.
       </p>
     </div>
     """, unsafe_allow_html=True)
@@ -472,6 +502,9 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
             unsafe_allow_html=True,
         )
 
+    st.markdown("<br/>", unsafe_allow_html=True)
+    with st.expander("📱 Ξεκίνα εδώ (ιδανικό από κινητό)", expanded=True):
+        collect_and_save_profile("mob")
     st.markdown("<br/>", unsafe_allow_html=True)
     if HAS_SAC:
         try:
