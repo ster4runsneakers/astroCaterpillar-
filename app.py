@@ -17,6 +17,7 @@ from chart_plotter import plot_natal_chart, plot_biwheel_chart, create_interacti
 
 from ai_engine import (
     analyze_natal_chart_ai,
+    analyze_natal_chart_ai_stream,
     analyze_synastry_ai,
     analyze_transits_ai,
     ask_caterpillar_chat,
