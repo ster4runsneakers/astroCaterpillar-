@@ -1,4 +1,4 @@
-# ai_engine.py - Fixed GenAI SDK Engine
+# ai_engine.py - Complete GenAI Engine
 import os
 import time
 import streamlit as st
@@ -20,6 +20,56 @@ def _get_client(user_api_key=""):
         return genai.Client(api_key=key)
     return None
 
+def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
+    client = _get_client(user_api_key)
+    if not client:
+        yield "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
+        return
+
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM_PROMPT,
+        max_output_tokens=2048,
+        temperature=0.7
+    )
+
+    prompt = f"""
+    Κάνε μια αναλυτική, ζεστή, γλαφυρή και βαθιά αστρολογική ανάλυση για το γενέθλιο προφίλ '{profile_name}', στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα.
+
+    ΔΕΔΟΜΕΝΑ ΧΑΡΤΗ:
+    - Θέσεις Πλανητών: {raw_positions}
+    - Οίκοι: {houses}
+    - Κινεζικό Ζώδιο: {cz_data}
+    - Στοιχεία & Ποιότητες: {indicators}
+    - Όψεις: {aspects}
+
+    ΟΔΗΓΙΕΣ ΣΥΝΤΑΞΗΣ & ΥΦΟΥΣ:
+    1. ΜΗΝ ξεκινάς παραθέτοντας απλώς τη λίστα Ήλιου/Σελήνης/Ωροσκόπου.
+    2. ΠΛΕΞΕ στην ανάλυση μυθολογικούς συμβολισμούς και ιστορικές αλληγορίες που ταιριάζουν στις κυρίαρχες όψεις του χάρτη.
+    3. Χώρισε την ανάλυση σε:
+       - **Ψυχικός Πυρήνας & Αρχέτυπα (Προσωπικότητα)**
+       - **Συναισθηματικά Μονοπάτια & Έρωτας**
+       - **Πορεία Πεπρωμένου, Καριέρα & Ευκαιρίες**
+    4. Γράψε σε άπταιστα Ελληνικά.
+    """
+
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
+
+    for m_name in models_to_try:
+        try:
+            response = client.models.generate_content_stream(
+                model=m_name,
+                contents=prompt,
+                config=config
+            )
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+            return
+        except Exception:
+            continue
+
+    yield "⚠️ Στιγμιαία καθυστέρηση απόκρισης από τις υποδομές AI. Παρακαλώ δοκιμάστε ξανά."
+
 def _run_genai_call(prompt: str, user_api_key: str = ""):
     client = _get_client(user_api_key)
     if not client:
@@ -31,7 +81,6 @@ def _run_genai_call(prompt: str, user_api_key: str = ""):
         temperature=0.7
     )
 
-    # Ενεργά και υποστηριζόμενα μοντέλα στο νέο SDK
     models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
     last_err = ""
 
@@ -54,7 +103,7 @@ def _run_genai_call(prompt: str, user_api_key: str = ""):
 
     return f"⚠️ Στιγμιαία καθυστέρηση απόκρισης. Παρακαλώ πατήστε ξανά το κουμπί σε 2-3 δευτερόλεπτα.\n*(Log: {last_err})*"
 
-# --- NATAL CHART CACHING ---
+# --- CACHED FUNCTIONS ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
@@ -78,7 +127,6 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
     """
     return _run_genai_call(prompt, user_api_key)
 
-# --- TRANSITS CACHING ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
     prompt = f"""
@@ -89,7 +137,6 @@ def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_
     """
     return _run_genai_call(prompt, user_api_key)
 
-# --- SYNASTRY CACHING ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el", user_api_key=""):
     prompt = f"""
