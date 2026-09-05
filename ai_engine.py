@@ -1,4 +1,4 @@
-# ai_engine.py - Real-Time Streaming Engine
+# ai_engine.py - Complete Protected & Cached Engine
 import os
 import time
 import streamlit as st
@@ -20,14 +20,34 @@ def _configure_gemini(user_api_key=""):
         return True
     return False
 
-def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
-    """
-    Generator που στέλνει ακαριαία τα chunks στο Streamlit st.write_stream
-    """
+def _run_cached_gemini_call(prompt: str, user_api_key: str = ""):
     if not _configure_gemini(user_api_key):
-        yield "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY."
-        return
+        return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY."
 
+    generation_config = genai.GenerationConfig(
+        max_output_tokens=2048,
+        temperature=0.7
+    )
+
+    free_models = ['gemini-2.5-flash', 'gemini-1.5-flash']
+    
+    for model_name in free_models:
+        try:
+            model = genai.GenerativeModel(model_name, generation_config=generation_config)
+            response = model.generate_content(prompt)
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            if "503" in str(e):
+                time.sleep(1.0)
+                continue
+            continue
+
+    return "⚠️ Στιγμιαίος φόρτος στις υποδομές AI. Παρακαλώ δοκιμάστε ξανά σε λίγα δευτερόλεπτα."
+
+# --- NATAL CHART CACHING ---
+@st.cache_data(ttl=86400, show_spinner=False)
+def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
     {SYSTEM_PROMPT}
 
@@ -49,43 +69,37 @@ def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, 
        - **Πορεία Πεπρωμένου, Καριέρα & Ευκαιρίες**
     4. Γράψε σε άπταιστα Ελληνικά.
     """
+    return _run_cached_gemini_call(prompt, user_api_key)
 
-    # Δοκιμή σταθερών μοντέλων Flash
-    active_models = ['gemini-2.5-flash', 'gemini-1.5-flash']
-    
-    for model_name in active_models:
-        try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt, stream=True)
-            
-            for chunk in response:
-                if hasattr(chunk, 'text') and chunk.text:
-                    yield chunk.text
-            return  # Ολοκληρώθηκε με επιτυχία
-            
-        except Exception as e:
-            err_str = str(e)
-            if "503" in err_str:
-                time.sleep(1.0)
-                continue
-            continue
-
-    yield "⚠️ Προσωρινός φόρτος στις υποδομές της Google. Παρακαλώ ξαναδοκιμάστε σε λίγα δευτερόλεπτα."
-
-def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
-    full_text = ""
-    for chunk in analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang, user_api_key):
-        full_text += chunk
-    return full_text
-
+# --- TRANSITS CACHING ---
+@st.cache_data(ttl=86400, show_spinner=False)
 def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
-    return analyze_natal_chart_ai(profile_name, transits_data, {}, "", "", "", lang, user_api_key)
+    prompt = f"""
+    {SYSTEM_PROMPT}
 
+    Κάνε μια αναλυτική πρόβλεψη διελεύσεων για το προφίλ '{profile_name}' για τη χρονική περίοδο '{timeframe}'.
+    Δεδομένα Διελεύσεων: {transits_data}
+
+    Σύνθεσε τις επιδράσεις των πλανητών με γλαφυρό τρόπο, χρησιμοποιώντας αλληγορίες και εστιάζοντας σε ευκαιρίες, προκλήσεις και ψυχολογική εξέλιξη.
+    """
+    return _run_cached_gemini_call(prompt, user_api_key)
+
+# --- SYNASTRY CACHING ---
+@st.cache_data(ttl=86400, show_spinner=False)
 def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el", user_api_key=""):
-    return analyze_natal_chart_ai(f"{p1} & {p2}", synastry_aspects, {}, "", "", "", lang, user_api_key)
+    prompt = f"""
+    {SYSTEM_PROMPT}
+
+    Κάνε μια αναλυτική ανάλυση συναστρίας και χημικής αλληλεπίδρασης ανάμεσα στα άτομα '{p1}' και '{p2}'.
+    Όψεις Συναστρίας: {synastry_aspects}
+
+    Ανάλυσε τη συναισθηματική σύνδεση, τα σημεία τριβής και τη μυθολογική αλληγορία της σχέσης τους.
+    """
+    return _run_cached_gemini_call(prompt, user_api_key)
 
 def ask_caterpillar_chat(context_text, user_prompt, lang="el", user_api_key=""):
-    return analyze_natal_chart_ai("Chat", user_prompt, {}, "", "", "", lang, user_api_key)
+    prompt = f"{SYSTEM_PROMPT}\n\nΠλαίσιο:\n{context_text}\n\nΕρώτηση Χρήστη: {user_prompt}"
+    return _run_cached_gemini_call(prompt, user_api_key)
 
 def clear_ai_cache():
-    pass
+    st.cache_data.clear()
