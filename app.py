@@ -733,3 +733,187 @@ elif menu_choice.startswith("3."):
                     label="📥 Download Synastry Report (.txt)",
                     data=report_text,
                     file_name=f"Synastry_Report_{p1}_{p2}.txt",
+                    mime="text/plain"
+                )
+
+                st.markdown("---")
+                if st.button("📚 Εξαγωγή Synastry Ebook (PDF)"):
+                    with st.spinner("Σύνθεση Ebook... / Building Ebook..."):
+                        syn_pdf_bytes = create_synastry_ebook(
+                            p1, p2, 
+                            saved_profiles[p1], 
+                            saved_profiles[p2], 
+                            lang=lang
+                        )
+                        st.download_button(
+                            "📥 Download Synastry Ebook (PDF)", 
+                            syn_pdf_bytes, 
+                            file_name=f"Synastry_{p1}_{p2}.pdf", 
+                            mime="application/pdf"
+                        )
+                
+                st.markdown("---")
+                st.subheader("💬 Chat με τον AstroCaterpillar (Συναστρία)")
+                
+                sy_chat_key = chat_bucket("synastry", f"{p1}|{p2}")
+                for msg in st.session_state.chat_history[sy_chat_key]:
+                    with st.chat_message(msg["role"]):
+                        st.write(msg["content"])
+                        
+                user_q = st.chat_input("Κάνε μια ερώτηση πάνω στη συναστρία των δύο ατόμων...")
+                if user_q:
+                    st.session_state.chat_history[sy_chat_key].append({"role": "user", "content": user_q})
+                    with st.spinner("Σκέφτεται... / Thinking..."):
+                        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[sy_chat_key]])
+                        full_prompt = f"Αρχική Ανάλυση Συναστρίας ({p1} & {p2}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
+                        ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
+                        st.session_state.chat_history[sy_chat_key].append({"role": "assistant", "content": ans})
+                        st.rerun()
+
+# --- TAB 4: EXPORT PDF ---
+elif menu_choice.startswith("4."):
+    st.header(f"📥 Εξαγωγή PDF / PDF Export: {selected_profile}")
+    
+    col_a, col_b = st.columns(2)
+    natal_degrees = {p: extract_deg(v) for p, v in prof_data["positions"].items()}
+    
+    with col_a:
+        st.subheader("📄 One-Pager Summary")
+        if st.button("📥 Download One-Pager (PDF)"):
+            with st.spinner("Δημιουργία... / Generating..."):
+                fig, ax = plt.subplots(figsize=(5, 5), facecolor='#121824', subplot_kw={'projection': 'polar'})
+                plot_natal_chart(ax, natal_degrees)
+                
+                pdf_bytes = create_astrology_pdf(
+                    "AstroCaterpillar Summary",
+                    selected_profile,
+                    f"Date: {prof_data['date'].strftime('%d/%m/%Y')} | City: {prof_data['city']}",
+                    fig_mat=fig,
+                    summary_info=f"Positions: {str(natal_degrees)}",
+                    ai_summary_text=st.session_state.get(f"natal_ai_{selected_profile}_{lang}", "Δεν έχει παραχθεί AI ανάλυση."),
+                    lang=lang
+                )
+                st.download_button("Download PDF", pdf_bytes, file_name=f"{selected_profile}_summary.pdf", mime="application/pdf")
+                
+    with col_b:
+        st.subheader("📚 Executive Ebook")
+        if st.button("📥 Download Ebook (PDF)"):
+            with st.spinner("Σύνθεση Ebook... / Building Ebook..."):
+                ebook_bytes = create_full_astrology_ebook(selected_profile, prof_data, lang=lang)
+                st.download_button("Download Ebook PDF", ebook_bytes, file_name=f"{selected_profile}_Ebook.pdf", mime="application/pdf")
+
+# --- TAB 5: ASTROLOGY GUIDE ---
+elif menu_choice.startswith("5."):
+    st.header("📚 Οδηγός Αστρολογίας / Astrology Guide")
+    st.markdown("Χρησιμοποιήστε τους παρακάτω πίνακες ως οδηγό αναφοράς για τη σημασία των 12 Οίκων, των 12 Ζωδίων, των Ανάδρομων Πλανητών, των Στοιχείων και των Πιοτήτων.")
+    
+    col_g1, col_g2, col_g3 = st.columns(3)
+    
+    with col_g1:
+        st.subheader("🏠 Οι 12 Οίκοι")
+        for house_title, house_desc in HOUSES_GUIDE.items():
+            with st.expander(house_title):
+                st.write(house_desc)
+                
+    with col_g2:
+        st.subheader("♈ Τα 12 Ζώδια")
+        for zodiac_title, zodiac_desc in ZODIAC_GUIDE.items():
+            with st.expander(zodiac_title):
+                st.write(zodiac_desc)
+
+    with col_g3:
+        st.subheader("🔄 Ανάδρομοι Πλανήτες (R)")
+        for retro_title, retro_desc in RETROGRADE_GUIDE.items():
+            with st.expander(retro_title):
+                st.write(retro_desc)
+
+    st.markdown("---")
+    
+    col_g4, col_g5 = st.columns(2)
+    
+    with col_g4:
+        st.subheader("🧪 Τα 4 Στοιχεία / Elements")
+        for elem_title, elem_desc in ELEMENTS_GUIDE.items():
+            with st.expander(elem_title):
+                st.write(elem_desc)
+                
+    with col_g5:
+        st.subheader("⚖️ Οι 3 Ποιότητες / Modalities")
+        for mod_title, mod_desc in MODALITIES_GUIDE.items():
+            with st.expander(mod_title):
+                st.write(mod_desc)
+
+# --- TAB 6: ADMIN PANEL ---
+elif menu_choice.startswith("6."):
+    st.header("⚙️ Admin Panel")
+    
+    if not st.session_state.is_admin:
+        admin_pass = st.text_input("Κωδικός Πρόσβασης / Admin Password:", type="password")
+        if st.button("Σύνδεση ως Admin / Login"):
+            expected_admin = (
+                st.secrets.get("ADMIN_PASSWORD", "")
+                or __import__("os").getenv("ADMIN_PASSWORD", "")
+                or "admin123"
+            )
+            if admin_pass and admin_pass == expected_admin:
+                st.session_state.is_admin = True
+                st.success("Πρόσβαση εγκρίθηκε! / Access Granted!")
+                st.rerun()
+            else:
+                st.error("Λανθασμένος κωδικός / Incorrect Password.")
+    else:
+        st.success("Είστε συνδεδεμένος ως Admin / Logged in as Admin!")
+        db_profiles = load_profiles_from_db()
+        st.write(f"**Μόνιμα Αποθηκευμένα Προφίλ στη Βάση:** {len(db_profiles)}")
+        
+        st.markdown("---")
+        st.subheader("📦 Διαχείριση, Backup & Εισαγωγή Βάσης / Database Management")
+        
+        col_dl1, col_dl2 = st.columns(2)
+        
+        with col_dl1:
+            st.markdown("##### 1. Εξαγωγή / Export")
+            json_data = export_db_as_json()
+            st.download_button(
+                label="📥 Download Database (JSON)",
+                data=json_data,
+                file_name=f"astro_profiles_backup_{datetime.date.today()}.json",
+                mime="application/json"
+            )
+            
+            try:
+                with open(DB_FILE, "rb") as fp:
+                    db_bytes = fp.read()
+                st.download_button(
+                    label="📥 Download Database (.db)",
+                    data=db_bytes,
+                    file_name="astro_data.db",
+                    mime="application/x-sqlite3"
+                )
+            except Exception:
+                pass
+
+        with col_dl2:
+            st.markdown("##### 2. Εισαγωγή / Import JSON")
+            uploaded_json = st.file_uploader("Ανεβάστε αρχείο JSON / Upload JSON file:", type=["json"])
+            if uploaded_json is not None:
+                if st.button("📤 Εισαγωγή Προφίλ / Import Profiles"):
+                    try:
+                        content = uploaded_json.read().decode("utf-8")
+                        count = import_db_from_json(content)
+                        st.success(f"Εισήχθησαν {count} προφίλ! / Imported {count} profiles!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Σφάλμα / Error: {str(e)}")
+
+        st.markdown("---")
+        col_adm1, col_adm2 = st.columns(2)
+        with col_adm1:
+            if st.button("🧹 Καθαρισμός AI Cache / Clear AI Cache"):
+                clear_ai_cache()
+                st.session_state.chat_history = {}
+                st.success("Η AI Cache και το ιστορικό Chat καθαρίστηκαν!")
+        with col_adm2:
+            if st.button("🚪 Αποσύνδεση Admin / Logout"):
+                st.session_state.is_admin = False
+                st.rerun()
