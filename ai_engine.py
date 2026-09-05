@@ -1,4 +1,4 @@
-# ai_engine.py - Updated API Endpoints
+# ai_engine.py - Robust Multi-Model Fallback System
 import os
 import time
 import streamlit as st
@@ -6,9 +6,11 @@ from google import genai
 from openai import OpenAI
 
 SYSTEM_PROMPT = (
-    "Είσαι ένας έμπειρος, ζεστός, επικοινωνιακός και παραστατικός αστρολόγος, στο ύφος και τη φιλοσοφία της κλασικής ελληνικής αστρολογίας (όπως η Ισμήνη Καράλη και η Λίτσα Πατέρα). "
-    "Ο λόγος σου είναι εκφραστικός, με συναισθηματική ροή, ενθαρρυντικός και προσιτός. "
-    "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα."
+    "Είσαι ένας έμπειρος, ζεστός, επικοινωνιακός και βαθιά αφηγηματικός αστρολόγος, στο ύφος και τη φιλοσοφία της Ισμήνης Καράλη και της Λίτσας Πατέρα. "
+    "Ο λόγος σου είναι γλαφυρός, συναισθηματικός και ενθαρρυντικός. "
+    "ΥΠΟΧΡΕΩΤΙΚΑ ενσωματώνεις στις αναλύσεις σου στοιχεία από την ελληνική μυθολογία, την ιστορία και τα αρχαία αρχέτυπα, "
+    "συνδέοντας τους πλανήτες και τις όψεις με αλληγορίες και ιστορικούς συμβολισμούς. "
+    "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα σε μια ζωντανή αφήγηση."
 )
 
 def _get_openrouter_client(user_api_key=""):
@@ -38,15 +40,19 @@ def _get_gemini_client(user_api_key=""):
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
     last_errors = []
 
-    # 1. Gemini Direct (Ενημερωμένα μοντέλα 2026 + Retry για 503)
+    # 1. Gemini Direct με Exponential Backoff & Διευρυμένα Μοντέλα
     gem_client = _get_gemini_client(user_api_key)
     if gem_client:
-        active_gemini_models = ['gemini-3.6-flash', 'gemini-2.5-flash']
+        active_gemini_models = [
+            'gemini-3.6-flash',
+            'gemini-2.5-flash',
+            'gemini-2.5-pro',
+            'gemini-2.0-flash'
+        ]
         full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
         
         for g_model in active_gemini_models:
-            # Δοκιμή 2 φορές σε περίπτωση προσωρινού 503 UNAVAILABLE
-            for attempt in range(2):
+            for attempt in range(3):
                 try:
                     resp = gem_client.models.generate_content(
                         model=g_model,
@@ -55,19 +61,20 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
                     if resp and resp.text:
                         return resp.text
                 except Exception as e:
-                    last_errors.append(f"Gemini ({g_model}): {str(e)}")
-                    if "503" in str(e) and attempt == 0:
-                        time.sleep(1.5)  # Αναμονή 1.5 δευτερόλεπτο και ξαναδοκιμή
+                    err_str = str(e)
+                    last_errors.append(f"Gemini ({g_model}): {err_str}")
+                    if "503" in err_str or "UNAVAILABLE" in err_str:
+                        time.sleep(1.0 * (attempt + 1))
                         continue
                     break
 
-    # 2. OpenRouter Fallback (Ενεργά δωρεάν slugs)
+    # 2. OpenRouter Fallback με Ενεργά Free Models
     or_client = _get_openrouter_client(user_api_key)
     if or_client:
         active_or_free_models = [
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "google/gemini-2.5-flash:free",
-            "openrouter/auto"
+            "qwen/qwen-2.5-coder-32b-instruct:free",
+            "google/gemma-2-9b-it:free",
+            "mistralai/mistral-7b-instruct:free"
         ]
         
         for model_name in active_or_free_models:
@@ -92,14 +99,14 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
 
     err_msg = " | ".join(last_errors) if last_errors else "Δεν βρέθηκε διαθέσιμη AI μηχανή."
     return (
-        "⚠️ Προσωρινή αυξημένη κίνηση στα AI μοντέλα.\n\n"
-        "Παρακαλώ πατήστε ξανά το κουμπί υπολογισμού σε λίγα δευτερόλεπτα.\n"
-        f"*(Τεχνική λεπτομέρεια: {err_msg})*"
+        "⚠️ Προσωρινή αυξημένη κίνηση στις υποδομές AI.\n\n"
+        "Παρακαλώ δοκιμάστε ξανά σε λίγα δευτερόλεπτα.\n"
+        f"*(Τεχνικό Log: {err_msg})*"
     )
 
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
-    Κάνε μια αναλυτική, ζεστή, γλαφυρή και παραστατική αστρολογική ανάλυση για το γενέθλιο προφίλ '{profile_name}', στο ύφος και τη φιλοσοφία της κλασικής ελληνικής αστρολογίας (όπως η Ισμήνη Καράλη και η Λίτσα Πατέρα).
+    Κάνε μια αναλυτική, ζεστή, γλαφυρή και βαθιά αστρολογική ανάλυση για το γενέθλιο προφίλ '{profile_name}', στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα.
 
     ΔΕΔΟΜΕΝΑ ΧΑΡΤΗ:
     - Θέσεις Πλανητών: {raw_positions}
@@ -108,20 +115,20 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
     - Στοιχεία & Ποιότητες: {indicators}
     - Όψεις: {aspects}
 
-    ΟΔΗΓΙΕΣ ΣΥΝΤΑΞΗΣ:
+    ΟΔΗΓΙΕΣ ΣΥΝΤΑΞΗΣ & ΥΦΟΥΣ:
     1. ΜΗΝ ξεκινάς παραθέτοντας απλώς τη λίστα Ήλιου/Σελήνης/Ωροσκόπου.
-    2. Ξεκίνα αμέσως την ουσιαστική ερμηνεία και σύνθεση του χάρτη.
-    3. Χώρισε την ανάλυση σε:
-       - **Προσωπικότητα & Συναισθηματικός Κόσμος**
-       - **Έρωτας & Σχέσεις**
-       - **Επαγγελματική Πορεία & Ευκαιρίες**
-    4. Χρησιμοποίησε ζεστή, εκφραστική γλώσσα σε άπταιστα Ελληνικά.
+    2. ΠΛΕΞΕ στην ανάλυση μυθολογικούς συμβολισμούς (π.χ. τους μύθους των θεών/πλανητών) και ιστορικές αλληγορίες που ταιριάζουν στις κυρίαρχες όψεις του χάρτη.
+    3. Χώρισε την ανάλυση στις εξής ενότητες:
+       - **Ψυχικός Πυρήνας & Αρχέτυπα (Προσωπικότητα)**
+       - **Συναισθηματικά Μονοπάτια & Έρωτας**
+       - **Πορεία Πεπρωμένου, Καριέρα & Ευκαιρίες**
+    4. Γράψε σε άπταιστα, πλούσια Ελληνικά.
     """
     return _generate_unified_response(prompt, user_api_key)
 
 def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
     prompt = f"""
-    Κάνε μια ζεστή, παραστατική ανάλυση μηνιαίων διελεύσεων για το προφίλ '{profile_name}' ({timeframe}) στο ύφος της Λίτσας Πατέρα και της Ισμήνης Καράλη.
+    Κάνε μια ζεστή, παραστατική ανάλυση μηνιαίων διελεύσεων για το προφίλ '{profile_name}' ({timeframe}) στο ύφος της Λίτσας Πατέρα και της Ισμήνης Καραλή.
     Δεδομένα Διελεύσεων: {transits_data}
     """
     return _generate_unified_response(prompt, user_api_key)
