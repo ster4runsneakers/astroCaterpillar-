@@ -60,12 +60,6 @@ def calculate_monthly_transits(natal_positions: dict, year: int, month: int):
 
     clean_natal = {planet: _safe_extract_deg(pos) for planet, pos in natal_positions.items()}
 
-    # Υπολογισμός διελεύσεων για τη 15η ημέρα του επιλεγμένου μήνα
-    transit_raw_positions = calculate_natal_positions(year, month, 15, 12.0)
-    clean_transits = {planet: _safe_extract_deg(pos) for planet, pos in transit_raw_positions.items()}
-
-    transits_found = []
-
     aspect_targets = {
         0.0: "Σύνοδος / Conjunction",
         60.0: "Εξάγωνο / Sextile",
@@ -73,27 +67,36 @@ def calculate_monthly_transits(natal_positions: dict, year: int, month: int):
         120.0: "Τρίγωνο / Trine",
         180.0: "Αντίθεση / Opposition"
     }
-
     outer_planets = ["Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"]
+    sample_days = [1, 8, 15, 22, 28]
+    seen = set()
+    transits_found = []
 
-    for t_planet in outer_planets:
-        if t_planet not in clean_transits:
+    for day in sample_days:
+        try:
+            transit_raw_positions = calculate_natal_positions(year, month, day, 12.0)
+        except Exception:
             continue
-        
-        t_deg = clean_transits[t_planet]
-
-        for n_planet, n_deg in clean_natal.items():
-            diff = abs(t_deg - n_deg) % 360.0
-            if diff > 180.0:
-                diff = 360.0 - diff
-
-            for target_angle, aspect_name in aspect_targets.items():
-                if abs(diff - target_angle) <= 3.0:
-                    transits_found.append({
-                        "transit_planet": t_planet,
-                        "aspect": aspect_name,
-                        "natal_planet": n_planet,
-                        "orb": round(abs(diff - target_angle), 2)
-                    })
-
+        clean_transits = {planet: _safe_extract_deg(pos) for planet, pos in transit_raw_positions.items()}
+        for t_planet in outer_planets:
+            if t_planet not in clean_transits:
+                continue
+            t_deg = clean_transits[t_planet]
+            for n_planet, n_deg in clean_natal.items():
+                diff = abs(t_deg - n_deg) % 360.0
+                if diff > 180.0:
+                    diff = 360.0 - diff
+                for target_angle, aspect_name in aspect_targets.items():
+                    if abs(diff - target_angle) <= 3.0:
+                        key = (t_planet, aspect_name, n_planet)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        transits_found.append({
+                            "transit_planet": t_planet,
+                            "aspect": aspect_name,
+                            "natal_planet": n_planet,
+                            "orb": round(abs(diff - target_angle), 2),
+                            "approx_day": day,
+                        })
     return transits_found
