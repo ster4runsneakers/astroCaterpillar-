@@ -5,6 +5,18 @@ import sqlite3
 import streamlit as st
 import matplotlib.pyplot as plt
 
+try:
+    from streamlit_option_menu import option_menu
+    HAS_OPTION_MENU = True
+except Exception:
+    HAS_OPTION_MENU = False
+
+try:
+    import streamlit_antd_components as sac
+    HAS_SAC = True
+except Exception:
+    HAS_SAC = False
+
 # --- INTERNAL IMPORTS ---
 from cities_el import GREEK_AND_WORLD_CITIES, ZODIAC_SIGNS, PLANET_TRANSLATIONS
 from ephemeris_engine import calculate_natal_positions, calculate_houses
@@ -409,7 +421,30 @@ menu_options = [
     "5. Οδηγός Αστρολογίας / Astrology Guide",
     "6. Admin Panel"
 ]
-menu_choice = st.sidebar.radio("Πλοήγηση / Navigation:", menu_options)
+if HAS_OPTION_MENU:
+    with st.sidebar:
+        menu_choice = option_menu(
+            menu_title="Πλοήγηση",
+            options=menu_options,
+            icons=["stars", "calendar3", "heart", "file-earmark-pdf", "book", "gear"],
+            menu_icon="bug",
+            default_index=0,
+            orientation="vertical",
+            styles={
+                "container": {"background-color": "transparent", "padding": "0"},
+                "icon": {"color": "#93C5FD", "font-size": "16px"},
+                "nav-link": {
+                    "color": "#E2E8F0",
+                    "font-size": "14px",
+                    "text-align": "left",
+                    "margin": "2px 0",
+                    "--hover-color": "#1E293B",
+                },
+                "nav-link-selected": {"background-color": "#1D4ED8"},
+            },
+        )
+else:
+    menu_choice = st.sidebar.radio("Πλοήγηση / Navigation:", menu_options)
 
 # --- MAIN CONTROLLER ---
 if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or menu_choice.startswith("6.")):
@@ -438,6 +473,20 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
         )
 
     st.markdown("<br/>", unsafe_allow_html=True)
+    if HAS_SAC:
+        try:
+            sac.steps(
+                items=[
+                    sac.StepsItem(title="Όνομα", description="Αριστερά στη στήλη"),
+                    sac.StepsItem(title="Γέννηση", description="Ημερομηνία, ώρα, πόλη"),
+                    sac.StepsItem(title="Υπολογισμός", description="Κουμπί χάρτη"),
+                ],
+                index=0,
+                size="sm",
+                color="blue",
+            )
+        except Exception:
+            pass
     s1, s2, s3 = st.columns(3)
     steps = [
         ("01", "Όνομα", "Γράψε όνομα ή αρχικά στην sidebar. Δεν αποθηκεύεται σε εξωτερικό server (guest mode)."),
@@ -559,9 +608,31 @@ if menu_choice.startswith("1."):
             })
         st.dataframe(table_rows, use_container_width=True, hide_index=True)
         if aspects:
-            st.caption("Κύριες όψεις: " + " · ".join(
-                f"{a['p1']} {a['aspect']} {a['p2']}" for a in aspects[:8]
-            ))
+            if HAS_SAC:
+                try:
+                    colors = {
+                        "Conjunction": "gold",
+                        "Trine": "green",
+                        "Sextile": "cyan",
+                        "Square": "red",
+                        "Opposition": "orange",
+                    }
+                    sac.tags(
+                        [
+                            sac.Tag(
+                                f"{a['p1']} {a['aspect']} {a['p2']}",
+                                color=colors.get(a["aspect"], "blue"),
+                            )
+                            for a in aspects[:8]
+                        ],
+                        align="start",
+                    )
+                except Exception:
+                    st.caption(" · ".join(f"{a['p1']} {a['aspect']} {a['p2']}" for a in aspects[:8]))
+            else:
+                st.caption("Κύριες όψεις: " + " · ".join(
+                    f"{a['p1']} {a['aspect']} {a['p2']}" for a in aspects[:8]
+                ))
         
     with col2:
         st.subheader("📊 Βασικοί Δείκτες / Key Indicators")
