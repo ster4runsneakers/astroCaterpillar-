@@ -411,11 +411,11 @@ if menu_choice.startswith("1."):
 
 st.markdown("---")
     st.subheader("🤖 AstroCaterpillar AI Analysis")
-    
+
     btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
     if st.button(btn_ai):
         from ai_engine import analyze_natal_chart_ai_stream
-        
+
         stream_gen = analyze_natal_chart_ai_stream(
             selected_profile,
             str(raw_natal_pos),
@@ -425,28 +425,28 @@ st.markdown("---")
             str(aspects),
             lang=lang
         )
-        
+
         report = st.write_stream(stream_gen)
         st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
 
     cache_key = f"natal_ai_{selected_profile}_{lang}"
     if cache_key in st.session_state:
         report_text = st.session_state[cache_key]
-        
+
         st.download_button(
             label="📥 Download AI Report (.txt)",
             data=report_text,
             file_name=f"AstroCaterpillar_Report_{selected_profile}.txt",
             mime="text/plain"
         )
-        
+
         st.markdown("---")
         st.subheader("💬 Chat με τον AstroCaterpillar (Γενέθλιος Χάρτης)")
-        
+
         for msg in st.session_state.chat_history["natal"]:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
-                
+
         user_q = st.chat_input("Κάνε μια ερώτηση πάνω στον γενέθλιο χάρτη σου...")
         if user_q:
             st.session_state.chat_history["natal"].append({"role": "user", "content": user_q})
