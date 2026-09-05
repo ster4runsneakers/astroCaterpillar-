@@ -1,5 +1,6 @@
-# ai_engine.py - Fast Engine (<5s Execution)
+# ai_engine.py - Fast Engine with Solid Fallbacks
 import os
+import time
 import streamlit as st
 from google import genai
 from openai import OpenAI
@@ -15,11 +16,11 @@ SYSTEM_PROMPT = (
 def _get_openrouter_client(user_api_key=""):
     clean_user_key = user_api_key.strip() if user_api_key else ""
     if clean_user_key and clean_user_key.startswith("sk-or-"):
-        return OpenAI(api_key=clean_user_key, base_url="https://openrouter.ai/api/v1", timeout=8.0)
+        return OpenAI(api_key=clean_user_key, base_url="https://openrouter.ai/api/v1", timeout=10.0)
     
     master_key = (st.secrets.get("OPENROUTER_API_KEY", "") or os.getenv("OPENROUTER_API_KEY", "")).strip()
     if master_key:
-        return OpenAI(api_key=master_key, base_url="https://openrouter.ai/api/v1", timeout=8.0)
+        return OpenAI(api_key=master_key, base_url="https://openrouter.ai/api/v1", timeout=10.0)
     return None
 
 def _get_gemini_client(user_api_key=""):
@@ -35,30 +36,36 @@ def _get_gemini_client(user_api_key=""):
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
     last_errors = []
 
-    # 1. Gemini Fast Direct Check (1 προσπάθεια ανά μοντέλο, χωρίς sleep)
+    # 1. Gemini Direct (με έξυπνο retry 1s σε περίπτωση 503)
     gem_client = _get_gemini_client(user_api_key)
     if gem_client:
-        active_models = ['gemini-2.5-flash', 'gemini-3.6-flash']
+        active_models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3.6-flash']
         full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
         
         for g_model in active_models:
-            try:
-                resp = gem_client.models.generate_content(
-                    model=g_model,
-                    contents=full_prompt
-                )
-                if resp and resp.text:
-                    return resp.text
-            except Exception as e:
-                last_errors.append(f"{g_model}: {str(e)}")
-                continue
+            for attempt in range(2): # max 2 προσπάθειες ανά μοντέλο
+                try:
+                    resp = gem_client.models.generate_content(
+                        model=g_model,
+                        contents=full_prompt
+                    )
+                    if resp and resp.text:
+                        return resp.text
+                except Exception as e:
+                    err_str = str(e)
+                    last_errors.append(f"{g_model}: {err_str}")
+                    if "503" in err_str and attempt == 0:
+                        time.sleep(1.0) # Σύντομη αναμονή 1s αν είναι φορτωμένο
+                        continue
+                    break
 
-    # 2. OpenRouter Fast Fallback (Timeout 8s)
+    # 2. OpenRouter Fallback (Ενεργά δωρεάν slugs)
     or_client = _get_openrouter_client(user_api_key)
     if or_client:
         fast_or_models = [
-            "google/gemma-2-9b-it:free",
-            "qwen/qwen-2.5-coder-32b-instruct:free"
+            "google/gemini-2.0-flash-exp:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "openrouter/auto"
         ]
         
         for model_name in fast_or_models:
@@ -70,7 +77,7 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
                         {"role": "user", "content": prompt}
                     ],
                     extra_headers={"HTTP-Referer": "https://astrocaterpillar.streamlit.app"},
-                    timeout=8.0
+                    timeout=10.0
                 )
                 if response and response.choices and response.choices[0].message.content:
                     return response.choices[0].message.content
@@ -79,7 +86,7 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
                 continue
 
     err_msg = " | ".join(last_errors) if last_errors else "Όλες οι AI μηχανές είναι εκτός σύνδεσης."
-    return f"⚠️ Αδυναμία ταχείας απόκρισης AI. Παρακαλώ δοκιμάστε ξανά.\n*(Log: {err_msg})*"
+    return f"⚠️ Στιγμιαίος φόρτος στα AI μοντέλα. Παρακαλώ πατήστε ξανά το κουμπί σε λίγα δευτερόλεπτα.\n*(Log: {err_msg})*"
 
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
