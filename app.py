@@ -317,18 +317,69 @@ menu_options = [
 ]
 menu_choice = st.sidebar.radio("Πλοήγηση / Navigation:", menu_options)
 
-# --- MAIN CONTROLLER ---
+# --- MAIN CONTROLLER & WELCOME DASHBOARD ---
 if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or menu_choice.startswith("6.")):
-    msg = "👈 Παρακαλώ εισάγετε τα στοιχεία σας στη sidebar / Please enter your details in the sidebar."
-    st.warning(msg)
+    # Hero Welcome Banner
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); padding: 30px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 25px; text-align: center;">
+        <h1 style="color: #F8FAFC; margin-bottom: 10px;">🐛 Καλώς ήρθατε στο AstroCaterpillar AI</h1>
+        <p style="color: #94A3B8; font-size: 1.15em; margin-bottom: 0;">
+            Προηγμένη Αστρολογική Ανάλυση & Συνθετική AI Ερμηνεία με Μυθολογικά Αρχέτυπα
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Call to Action Container
+    st.info("👈 **Ξεκινήστε τώρα:** Συμπληρώστε τα στοιχεία γέννησής σας στη πλαϊνή μπάρα (Sidebar) και πατήστε **'💾 Υπολογισμός Χάρτη'**.")
+
+    # Quick Demo Option Button
+    col_demo1, col_demo2 = st.columns([2, 1])
+    with col_demo1:
+        st.caption("⚡ Θέλετε να δείτε την εφαρμογή αμέσως σε δράση χωρίς εισαγωγή στοιχείων;")
+    with col_demo2:
+        if st.button("🚀 Φόρτωση Δοκιμαστικού Προφίλ (Demo)"):
+            demo_d = datetime.date(1990, 5, 15)
+            demo_t = datetime.time(14, 30)
+            demo_city = "Athens"
+            demo_hour = demo_t.hour + (demo_t.minute / 60.0)
+            demo_pos = calculate_natal_positions(demo_d.year, demo_d.month, demo_d.day, demo_hour)
+            
+            st.session_state.guest_profiles["Demo Profile"] = {
+                "date": demo_d, "time": demo_t, "city": demo_city, "positions": demo_pos
+            }
+            st.rerun()
+
+    st.markdown("---")
+
+    # Feature Cards Layout
+    st.subheader("🔮 Τι μπορείτε να υπολογίσετε:")
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        st.markdown("""
+        <div style="background-color: #1E293B; padding: 20px; border-radius: 8px; border-top: 4px solid #3B82F6; height: 100%;">
+            <h3>🌌 Γενέθλιος Χάρτης</h3>
+            <p style="color: #CBD5E1;">Υπολογισμός ακριβών αστρονομικών θέσεων, Ωροσκόπου, Οίκων & Θεμελιώδους Τριάδας. Αφηγηματική AI ανάλυση ψυχικών αρχετύπων.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+        st.markdown("""
+        <div style="background-color: #1E293B; padding: 20px; border-radius: 8px; border-top: 4px solid #10B981; height: 100%;">
+            <h3>📅 Μηνιαίες Διελεύσεις</h3>
+            <p style="color: #CBD5E1;">Στρατηγική ανάλυση πλανητικών κύκλων και διελεύσεων για κάθε μήνα. Εντοπισμός ευκαιριών και προκλήσεων.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c3:
+        st.markdown("""
+        <div style="background-color: #1E293B; padding: 20px; border-radius: 8px; border-top: 4px solid #EC4899; height: 100%;">
+            <h3>💞 Συναστρία Σχέσεων</h3>
+            <p style="color: #CBD5E1;">Σύγκριση δύο αστρολογικών χαρτών, ανάλυση χημικής αλληλεπίδρασης, σημείων τριβής και εξαγωγή πλήρους Synastry Ebook.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
     st.stop()
-
-prof_data = saved_profiles.get(selected_profile, {})
-
-def extract_deg(val):
-    if isinstance(val, dict):
-        return val.get("deg", 0.0)
-    return float(val)
 
 # --- TAB 1: NATAL CHART ---
 if menu_choice.startswith("1."):
