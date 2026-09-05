@@ -409,7 +409,7 @@ if menu_choice.startswith("1."):
                 houses_formatted[f"Οίκος {h_num} / House {h_num}"] = f"{deg_in:.1f}° {sign_el} / {sign_en}"
             st.json(houses_formatted)
 
-st.markdown("---")
+    st.markdown("---")
     st.subheader("🤖 AstroCaterpillar AI Analysis")
 
     btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
