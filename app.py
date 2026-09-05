@@ -130,6 +130,34 @@ st.set_page_config(
     layout="wide"
 )
 
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');
+.stApp { background: radial-gradient(1200px 600px at 12% -10%, #1e3a5f 0%, #0B1220 42%, #070B14 100%); }
+.ac-hero {
+    background: linear-gradient(160deg, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.35) 100%);
+    border: 1px solid rgba(147,197,253,0.18);
+    border-radius: 22px;
+    padding: 2.2rem 2rem 1.8rem 2rem;
+    margin-bottom: 1.2rem;
+}
+.ac-kicker { color:#93C5FD; letter-spacing:.18em; font-size:.78rem; font-weight:600; text-transform:uppercase; margin:0 0 .4rem 0; font-family:'Source Sans 3',sans-serif; }
+.ac-title { font-family:'Cormorant Garamond',serif; font-size:3rem; line-height:1.05; color:#F8FAFC; margin:0 0 .6rem 0; }
+.ac-sub { color:#CBD5E1; font-size:1.05rem; line-height:1.55; max-width:46rem; font-family:'Source Sans 3',sans-serif; }
+.ac-card {
+    background: rgba(15,23,42,0.72);
+    border: 1px solid rgba(148,163,184,0.16);
+    border-radius: 16px;
+    padding: 1.15rem 1.1rem 1.05rem 1.1rem;
+    height: 100%;
+}
+.ac-card h3 { font-family:'Cormorant Garamond',serif; color:#E0E7FF; font-size:1.35rem; margin:0 0 .35rem 0; }
+.ac-card p { color:#94A3B8; font-size:.92rem; margin:0; line-height:1.5; font-family:'Source Sans 3',sans-serif; }
+.ac-step { color:#64748B; font-size:.75rem; letter-spacing:.12em; text-transform:uppercase; margin:0 0 .25rem 0; }
+.ac-foot { color:#64748B; font-size:.85rem; text-align:center; margin-top:1.4rem; }
+</style>
+""", unsafe_allow_html=True)
+
 # --- DATABASE SETUP (ADMIN ONLY) ---
 DB_FILE = "astro_data.db"
 
@@ -236,7 +264,7 @@ if "guest_profiles" not in st.session_state:
 
 # Chat memory stores per category
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = {"natal": [], "transits": [], "synastry": []}
+    st.session_state.chat_history = {}
 
 # --- LANGUAGE SELECTOR ---
 st.sidebar.title("🐛 AstroCaterpillar")
@@ -271,9 +299,19 @@ if selected_profile == new_prof_label:
             min_value=datetime.date(1900, 1, 1),
             max_value=datetime.date.today()
         )
-        new_time = st.time_input("Ώρα Γέννησης / Birth Time:", datetime.time(12, 0))
-        
+        unknown_time = st.checkbox("Δεν γνωρίζω ώρα γέννησης / Unknown birth time (solar chart)")
+        new_time = st.time_input("Ώρα Γέννησης / Birth Time:", datetime.time(12, 0), disabled=unknown_time)
+
+        city_filter = st.text_input("Αναζήτηση πόλης / Filter city:", "")
         city_keys = list(GREEK_AND_WORLD_CITIES.keys())
+        if city_filter.strip():
+            q = city_filter.strip().lower()
+            city_keys = [
+                k for k in city_keys
+                if q in k.lower()
+                or q in GREEK_AND_WORLD_CITIES[k].get("el", "").lower()
+                or q in GREEK_AND_WORLD_CITIES[k].get("en", "").lower()
+            ] or list(GREEK_AND_WORLD_CITIES.keys())
         city_options = {k: f"{GREEK_AND_WORLD_CITIES[k]['el']} / {GREEK_AND_WORLD_CITIES[k]['en']}" for k in city_keys}
         selected_city_key = st.selectbox(
             "Πόλη Γέννησης / Birth City:",
@@ -291,11 +329,14 @@ if selected_profile == new_prof_label:
                     new_date.year, new_date.month, new_date.day, hour_decimal, tz_name=tz_name
                 )
                 
+                if unknown_time:
+                    new_time = datetime.time(12, 0)
                 if st.session_state.is_admin:
                     save_profile_to_db(new_name.strip(), new_date, new_time, selected_city_key, pos)
                 else:
                     st.session_state.guest_profiles[new_name.strip()] = {
-                        "date": new_date, "time": new_time, "city": selected_city_key, "positions": pos
+                        "date": new_date, "time": new_time, "city": selected_city_key,
+                        "positions": pos, "unknown_time": unknown_time
                     }
                 st.success("OK!")
                 st.rerun()
@@ -311,6 +352,23 @@ else:
             del st.session_state.guest_profiles[selected_profile]
         st.rerun()
 
+if saved_profiles and not st.session_state.is_admin:
+    export_rows = []
+    for nm, pr in saved_profiles.items():
+        export_rows.append({
+            "name": nm,
+            "date": pr["date"].strftime("%Y-%m-%d") if hasattr(pr["date"], "strftime") else str(pr["date"]),
+            "time": pr["time"].strftime("%H:%M") if hasattr(pr["time"], "strftime") else str(pr["time"]),
+            "city": pr.get("city"),
+            "positions": pr.get("positions"),
+        })
+    st.sidebar.download_button(
+        "📥 Backup προφίλ (JSON)",
+        data=json.dumps(export_rows, ensure_ascii=False, indent=2),
+        file_name="astro_guest_backup.json",
+        mime="application/json",
+    )
+
 st.sidebar.markdown("---")
 
 menu_options = [
@@ -325,8 +383,47 @@ menu_choice = st.sidebar.radio("Πλοήγηση / Navigation:", menu_options)
 
 # --- MAIN CONTROLLER ---
 if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or menu_choice.startswith("6.")):
-    msg = "👈 Παρακαλώ εισάγετε τα στοιχεία σας στη sidebar / Please enter your details in the sidebar."
-    st.warning(msg)
+    st.markdown("""
+    <div class="ac-hero">
+      <p class="ac-kicker">Self-custody astrological studio</p>
+      <h1 class="ac-title">🐛 AstroCaterpillar</h1>
+      <p class="ac-sub">
+        Γενέθλιος χάρτης, διελεύσεις και συναστρία — με ακρίβεια επιμεληρίου και αφήγηση AI.
+        Τα δεδομένα μένουν στη συσκευή σου. Ξεκίνα από την αριστερή στήλη.
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    cards = [
+        ("🌌", "Γενέθλιος χάρτης", "Πλανήτες, οίκοι, όψεις, στοιχεία και κινεζικό ζώδιο σε διαδραστικό τροχό."),
+        ("📅", "Διελεύσεις", "Μακρο-κύκλοι του μήνα: ευκαιρίες και εντάσεις σε σχέση με τον γενέθλιο."),
+        ("💞", "Συναστρία", "Δύο χάρτες στον ίδιο τροχό και έκθεση συμβατότητας."),
+        ("📥", "PDF / Ebook", "One-pager ή πλήρες βιβλίο για προσωπική αρχειοθέτηση."),
+    ]
+    for col, (icon, title, body) in zip((c1, c2, c3, c4), cards):
+        col.markdown(
+            f'<div class="ac-card"><p class="ac-step">{icon}</p><h3>{title}</h3><p>{body}</p></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<br/>", unsafe_allow_html=True)
+    s1, s2, s3 = st.columns(3)
+    steps = [
+        ("01", "Όνομα", "Γράψε όνομα ή αρχικά στην sidebar. Δεν αποθηκεύεται σε εξωτερικό server (guest mode)."),
+        ("02", "Γέννηση", "Ημερομηνία, ώρα και πόλη. Η ώρα χρειάζεται για σωστό ωροσκόπο."),
+        ("03", "Υπολογισμός", "Πάτα «Υπολογισμός Χάρτη». Μετά ανοίγει ο τροχός και η AI ανάλυση."),
+    ]
+    for col, (num, title, body) in zip((s1, s2, s3), steps):
+        col.markdown(
+            f'<div class="ac-card"><p class="ac-step">Βήμα {num}</p><h3>{title}</h3><p>{body}</p></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        '<p class="ac-foot">← Συμπλήρωσε τα πεδία αριστερά και πάτα Υπολογισμός Χάρτη<br/>Η εφαρμογή είναι συμβολική / ψυχαγωγική — όχι ιατρική, νομική ή οικονομική συμβουλή.</p>',
+        unsafe_allow_html=True,
+    )
     st.stop()
 
 prof_data = saved_profiles.get(selected_profile, {})
@@ -338,6 +435,47 @@ def extract_deg(val):
         return float(val)
     except (TypeError, ValueError):
         return 0.0
+
+
+def house_of_degree(deg, houses):
+    try:
+        cusps = [float(houses.get(f"House_{i}", (i - 1) * 30)) % 360.0 for i in range(1, 13)]
+    except Exception:
+        return None
+    d = float(deg) % 360.0
+    for i in range(12):
+        start = cusps[i]
+        end = cusps[(i + 1) % 12]
+        if start <= end:
+            if start <= d < end:
+                return i + 1
+        else:
+            if d >= start or d < end:
+                return i + 1
+    return 1
+
+
+def format_chart_brief(natal_pos, houses, aspects, lang="el"):
+    lines = []
+    for planet, deg in natal_pos.items():
+        sign, din = get_sign_from_degrees(deg)
+        sign_l = ZODIAC_SIGNS.get(sign, {}).get(lang, sign)
+        pname = PLANET_TRANSLATIONS.get(planet, {}).get(lang, planet)
+        h = house_of_degree(deg, houses) if houses else "-"
+        lines.append(f"{pname}: {din:.1f}° {sign_l}, οίκος {h}")
+    asp_lines = []
+    for a in aspects[:18]:
+        p1 = PLANET_TRANSLATIONS.get(a["p1"], {}).get(lang, a["p1"])
+        p2 = PLANET_TRANSLATIONS.get(a["p2"], {}).get(lang, a["p2"])
+        asp_lines.append(f"{p1} {a['aspect']} {p2} (orb {a['orb']}°)")
+    return "\n".join(lines), "\n".join(asp_lines)
+
+
+def chat_bucket(kind, profile_key):
+    key = f"{kind}:{profile_key}"
+    if key not in st.session_state.chat_history:
+        st.session_state.chat_history[key] = []
+    return key
 
 # --- TAB 1: NATAL CHART ---
 if menu_choice.startswith("1."):
@@ -375,6 +513,25 @@ if menu_choice.startswith("1."):
         st.subheader("🪐 Διαδραστικός Χάρτης (Hover/Touch) / Interactive Chart")
         plotly_fig = create_interactive_natal_plotly(raw_natal_pos, houses, lang=lang)
         st.plotly_chart(plotly_fig, use_container_width=True)
+        table_rows = []
+        for planet, deg in natal_pos.items():
+            sign, din = get_sign_from_degrees(deg)
+            sign_el = ZODIAC_SIGNS.get(sign, {}).get("el", sign)
+            retro = ""
+            raw = raw_natal_pos.get(planet)
+            if isinstance(raw, dict) and raw.get("is_retro"):
+                retro = "R"
+            table_rows.append({
+                "Πλανήτης": PLANET_TRANSLATIONS.get(planet, {}).get("el", planet),
+                "Ζώδιο": f"{din:.1f}° {sign_el}",
+                "Οίκος": house_of_degree(deg, houses) or "-",
+                "R": retro,
+            })
+        st.dataframe(table_rows, use_container_width=True, hide_index=True)
+        if aspects:
+            st.caption("Κύριες όψεις: " + " · ".join(
+                f"{a['p1']} {a['aspect']} {a['p2']}" for a in aspects[:8]
+            ))
         
     with col2:
         st.subheader("📊 Βασικοί Δείκτες / Key Indicators")
@@ -407,10 +564,13 @@ if menu_choice.startswith("1."):
         elements_bilingual = {ELEMENT_TRANSLATIONS.get(k, k): v for k, v in elements_pct.items()}
         modalities_bilingual = {MODALITY_TRANSLATIONS.get(k, k): v for k, v in modalities_pct.items()}
         
-        st.json({
-            "Στοιχεία / Elements": elements_bilingual,
-            "Ποιότητες / Modalities": modalities_bilingual
-        })
+        st.write("**Στοιχεία / Elements**")
+        st.write(" · ".join([f"{k} {v}%" for k, v in elements_bilingual.items()]))
+        st.write("**Ποιότητες / Modalities**")
+        st.write(" · ".join([f"{k} {v}%" for k, v in modalities_bilingual.items()]))
+
+        if prof_data.get("unknown_time"):
+            st.warning("Η ώρα είναι άγνωστη — ο ωροσκόπος είναι προσεγγιστικός (ηλιακός χάρτης, 12:00).")
         
         with st.expander("💡 Πώς διαβάζονται τα Ποσοστά (%)", expanded=False):
             st.markdown("""
@@ -435,13 +595,14 @@ if menu_choice.startswith("1."):
     btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
     if st.button(btn_ai):
         with st.spinner("Ο AstroCaterpillar αναλύει τα δεδομένα... / Analyzing..."):
+            pos_brief, asp_brief = format_chart_brief(natal_pos, houses, aspects, lang=lang)
             report = analyze_natal_chart_ai(
                 selected_profile,
-                str(raw_natal_pos),
-                str(houses),
+                pos_brief,
+                str({k: houses[k] for k in houses if str(k).startswith("House_") or k in ("Asc", "MC")}),
                 str(cz_data),
                 f"Elements: {elements_pct}, Modalities: {modalities_pct}",
-                str(aspects),
+                asp_brief,
                 lang=lang
             )
             st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
@@ -462,19 +623,19 @@ if menu_choice.startswith("1."):
         st.subheader("💬 Chat με τον AstroCaterpillar (Γενέθλιος Χάρτης)")
         
         # Display history
-        for msg in st.session_state.chat_history["natal"]:
+        natal_chat_key = chat_bucket("natal", selected_profile)
+        for msg in st.session_state.chat_history[natal_chat_key]:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
                 
         user_q = st.chat_input("Κάνε μια ερώτηση πάνω στον γενέθλιο χάρτη σου...")
         if user_q:
-            st.session_state.chat_history["natal"].append({"role": "user", "content": user_q})
+            st.session_state.chat_history[natal_chat_key].append({"role": "user", "content": user_q})
             with st.spinner("Σκέφτεται... / Thinking..."):
-                # Pass whole conversation context
-                history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["natal"]])
+                history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[natal_chat_key]])
                 full_prompt = f"Αρχική Ανάλυση:\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
                 ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
-                st.session_state.chat_history["natal"].append({"role": "assistant", "content": ans})
+                st.session_state.chat_history[natal_chat_key].append({"role": "assistant", "content": ans})
                 st.rerun()
 
 # --- TAB 2: MONTHLY TRANSITS ---
@@ -523,18 +684,19 @@ elif menu_choice.startswith("2."):
         st.markdown("---")
         st.subheader("💬 Chat με τον AstroCaterpillar (Διελεύσεις)")
         
-        for msg in st.session_state.chat_history["transits"]:
+        tr_chat_key = chat_bucket("transits", f"{selected_profile}:{sel_month_num}:{sel_year}")
+        for msg in st.session_state.chat_history[tr_chat_key]:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
                 
         user_q = st.chat_input("Κάνε μια ερώτηση πάνω στις διελεύσεις του μήνα...")
         if user_q:
-            st.session_state.chat_history["transits"].append({"role": "user", "content": user_q})
+            st.session_state.chat_history[tr_chat_key].append({"role": "user", "content": user_q})
             with st.spinner("Σκέφτεται... / Thinking..."):
-                history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["transits"]])
+                history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[tr_chat_key]])
                 full_prompt = f"Αρχική Ανάλυση Διελεύσεων ({timeframe_label}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
                 ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
-                st.session_state.chat_history["transits"].append({"role": "assistant", "content": ans})
+                st.session_state.chat_history[tr_chat_key].append({"role": "assistant", "content": ans})
                 st.rerun()
 
 # --- TAB 3: SYNASTRY ---
@@ -571,186 +733,3 @@ elif menu_choice.startswith("3."):
                     label="📥 Download Synastry Report (.txt)",
                     data=report_text,
                     file_name=f"Synastry_Report_{p1}_{p2}.txt",
-                    mime="text/plain"
-                )
-
-                st.markdown("---")
-                if st.button("📚 Εξαγωγή Synastry Ebook (PDF)"):
-                    with st.spinner("Σύνθεση Ebook... / Building Ebook..."):
-                        syn_pdf_bytes = create_synastry_ebook(
-                            p1, p2, 
-                            saved_profiles[p1], 
-                            saved_profiles[p2], 
-                            lang=lang
-                        )
-                        st.download_button(
-                            "📥 Download Synastry Ebook (PDF)", 
-                            syn_pdf_bytes, 
-                            file_name=f"Synastry_{p1}_{p2}.pdf", 
-                            mime="application/pdf"
-                        )
-                
-                st.markdown("---")
-                st.subheader("💬 Chat με τον AstroCaterpillar (Συναστρία)")
-                
-                for msg in st.session_state.chat_history["synastry"]:
-                    with st.chat_message(msg["role"]):
-                        st.write(msg["content"])
-                        
-                user_q = st.chat_input("Κάνε μια ερώτηση πάνω στη συναστρία των δύο ατόμων...")
-                if user_q:
-                    st.session_state.chat_history["synastry"].append({"role": "user", "content": user_q})
-                    with st.spinner("Σκέφτεται... / Thinking..."):
-                        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["synastry"]])
-                        full_prompt = f"Αρχική Ανάλυση Συναστρίας ({p1} & {p2}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                        ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
-                        st.session_state.chat_history["synastry"].append({"role": "assistant", "content": ans})
-                        st.rerun()
-
-# --- TAB 4: EXPORT PDF ---
-elif menu_choice.startswith("4."):
-    st.header(f"📥 Εξαγωγή PDF / PDF Export: {selected_profile}")
-    
-    col_a, col_b = st.columns(2)
-    natal_degrees = {p: extract_deg(v) for p, v in prof_data["positions"].items()}
-    
-    with col_a:
-        st.subheader("📄 One-Pager Summary")
-        if st.button("📥 Download One-Pager (PDF)"):
-            with st.spinner("Δημιουργία... / Generating..."):
-                fig, ax = plt.subplots(figsize=(5, 5), facecolor='#121824', subplot_kw={'projection': 'polar'})
-                plot_natal_chart(ax, natal_degrees)
-                
-                pdf_bytes = create_astrology_pdf(
-                    "AstroCaterpillar Summary",
-                    selected_profile,
-                    f"Date: {prof_data['date'].strftime('%d/%m/%Y')} | City: {prof_data['city']}",
-                    fig_mat=fig,
-                    summary_info=f"Positions: {str(natal_degrees)}",
-                    ai_summary_text=st.session_state.get(f"natal_ai_{selected_profile}_{lang}", "Δεν έχει παραχθεί AI ανάλυση."),
-                    lang=lang
-                )
-                st.download_button("Download PDF", pdf_bytes, file_name=f"{selected_profile}_summary.pdf", mime="application/pdf")
-                
-    with col_b:
-        st.subheader("📚 Executive Ebook")
-        if st.button("📥 Download Ebook (PDF)"):
-            with st.spinner("Σύνθεση Ebook... / Building Ebook..."):
-                ebook_bytes = create_full_astrology_ebook(selected_profile, prof_data, lang=lang)
-                st.download_button("Download Ebook PDF", ebook_bytes, file_name=f"{selected_profile}_Ebook.pdf", mime="application/pdf")
-
-# --- TAB 5: ASTROLOGY GUIDE ---
-elif menu_choice.startswith("5."):
-    st.header("📚 Οδηγός Αστρολογίας / Astrology Guide")
-    st.markdown("Χρησιμοποιήστε τους παρακάτω πίνακες ως οδηγό αναφοράς για τη σημασία των 12 Οίκων, των 12 Ζωδίων, των Ανάδρομων Πλανητών, των Στοιχείων και των Πιοτήτων.")
-    
-    col_g1, col_g2, col_g3 = st.columns(3)
-    
-    with col_g1:
-        st.subheader("🏠 Οι 12 Οίκοι")
-        for house_title, house_desc in HOUSES_GUIDE.items():
-            with st.expander(house_title):
-                st.write(house_desc)
-                
-    with col_g2:
-        st.subheader("♈ Τα 12 Ζώδια")
-        for zodiac_title, zodiac_desc in ZODIAC_GUIDE.items():
-            with st.expander(zodiac_title):
-                st.write(zodiac_desc)
-
-    with col_g3:
-        st.subheader("🔄 Ανάδρομοι Πλανήτες (R)")
-        for retro_title, retro_desc in RETROGRADE_GUIDE.items():
-            with st.expander(retro_title):
-                st.write(retro_desc)
-
-    st.markdown("---")
-    
-    col_g4, col_g5 = st.columns(2)
-    
-    with col_g4:
-        st.subheader("🧪 Τα 4 Στοιχεία / Elements")
-        for elem_title, elem_desc in ELEMENTS_GUIDE.items():
-            with st.expander(elem_title):
-                st.write(elem_desc)
-                
-    with col_g5:
-        st.subheader("⚖️ Οι 3 Ποιότητες / Modalities")
-        for mod_title, mod_desc in MODALITIES_GUIDE.items():
-            with st.expander(mod_title):
-                st.write(mod_desc)
-
-# --- TAB 6: ADMIN PANEL ---
-elif menu_choice.startswith("6."):
-    st.header("⚙️ Admin Panel")
-    
-    if not st.session_state.is_admin:
-        admin_pass = st.text_input("Κωδικός Πρόσβασης / Admin Password:", type="password")
-        if st.button("Σύνδεση ως Admin / Login"):
-            expected_admin = (
-                st.secrets.get("ADMIN_PASSWORD", "")
-                or __import__("os").getenv("ADMIN_PASSWORD", "")
-                or "admin123"
-            )
-            if admin_pass and admin_pass == expected_admin:
-                st.session_state.is_admin = True
-                st.success("Πρόσβαση εγκρίθηκε! / Access Granted!")
-                st.rerun()
-            else:
-                st.error("Λανθασμένος κωδικός / Incorrect Password.")
-    else:
-        st.success("Είστε συνδεδεμένος ως Admin / Logged in as Admin!")
-        db_profiles = load_profiles_from_db()
-        st.write(f"**Μόνιμα Αποθηκευμένα Προφίλ στη Βάση:** {len(db_profiles)}")
-        
-        st.markdown("---")
-        st.subheader("📦 Διαχείριση, Backup & Εισαγωγή Βάσης / Database Management")
-        
-        col_dl1, col_dl2 = st.columns(2)
-        
-        with col_dl1:
-            st.markdown("##### 1. Εξαγωγή / Export")
-            json_data = export_db_as_json()
-            st.download_button(
-                label="📥 Download Database (JSON)",
-                data=json_data,
-                file_name=f"astro_profiles_backup_{datetime.date.today()}.json",
-                mime="application/json"
-            )
-            
-            try:
-                with open(DB_FILE, "rb") as fp:
-                    db_bytes = fp.read()
-                st.download_button(
-                    label="📥 Download Database (.db)",
-                    data=db_bytes,
-                    file_name="astro_data.db",
-                    mime="application/x-sqlite3"
-                )
-            except Exception:
-                pass
-
-        with col_dl2:
-            st.markdown("##### 2. Εισαγωγή / Import JSON")
-            uploaded_json = st.file_uploader("Ανεβάστε αρχείο JSON / Upload JSON file:", type=["json"])
-            if uploaded_json is not None:
-                if st.button("📤 Εισαγωγή Προφίλ / Import Profiles"):
-                    try:
-                        content = uploaded_json.read().decode("utf-8")
-                        count = import_db_from_json(content)
-                        st.success(f"Εισήχθησαν {count} προφίλ! / Imported {count} profiles!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Σφάλμα / Error: {str(e)}")
-
-        st.markdown("---")
-        col_adm1, col_adm2 = st.columns(2)
-        with col_adm1:
-            if st.button("🧹 Καθαρισμός AI Cache / Clear AI Cache"):
-                clear_ai_cache()
-                st.session_state.chat_history = {"natal": [], "transits": [], "synastry": []}
-                st.success("Η AI Cache και το ιστορικό Chat καθαρίστηκαν!")
-        with col_adm2:
-            if st.button("🚪 Αποσύνδεση Admin / Logout"):
-                st.session_state.is_admin = False
-                st.rerun()
