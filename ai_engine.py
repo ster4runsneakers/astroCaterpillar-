@@ -1,13 +1,14 @@
-# ai_engine.py - AstroCaterpillar Engine (Warm Expressive Style: Karali / Patera)
+# ai_engine.py - Updated API Endpoints
 import os
+import time
 import streamlit as st
 from google import genai
 from openai import OpenAI
 
 SYSTEM_PROMPT = (
     "Είσαι ένας έμπειρος, ζεστός, επικοινωνιακός και παραστατικός αστρολόγος, στο ύφος και τη φιλοσοφία της κλασικής ελληνικής αστρολογίας (όπως η Ισμήνη Καράλη και η Λίτσα Πατέρα). "
-    "Ο λόγος σου είναι εκφραστικός, με συναισθηματική ροή, ενθαρρυντικός και προσιτός, χωρίς όμως να χάνει την αστρολογική του ακρίβεια. "
-    "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες και αριθμούς. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα σε μια ολοκληρωμένη εικόνα."
+    "Ο λόγος σου είναι εκφραστικός, με συναισθηματική ροή, ενθαρρυντικός και προσιτός. "
+    "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα."
 )
 
 def _get_openrouter_client(user_api_key=""):
@@ -17,7 +18,7 @@ def _get_openrouter_client(user_api_key=""):
     
     master_key = (
         st.secrets.get("OPENROUTER_API_KEY", "") or 
-        st.secrets.get("DEEPSEEK_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
+        os.getenv("OPENROUTER_API_KEY", "")
     ).strip()
     
     if master_key:
@@ -37,34 +38,39 @@ def _get_gemini_client(user_api_key=""):
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
     last_errors = []
 
-    # 1. Gemini Direct
+    # 1. Gemini Direct (Ενημερωμένα μοντέλα 2026 + Retry για 503)
     gem_client = _get_gemini_client(user_api_key)
     if gem_client:
-        gemini_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+        active_gemini_models = ['gemini-3.6-flash', 'gemini-2.5-flash']
         full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
         
-        for g_model in gemini_models:
-            try:
-                resp = gem_client.models.generate_content(
-                    model=g_model,
-                    contents=full_prompt
-                )
-                if resp and resp.text:
-                    return resp.text
-            except Exception as e:
-                last_errors.append(f"Gemini ({g_model}): {str(e)}")
-                continue
+        for g_model in active_gemini_models:
+            # Δοκιμή 2 φορές σε περίπτωση προσωρινού 503 UNAVAILABLE
+            for attempt in range(2):
+                try:
+                    resp = gem_client.models.generate_content(
+                        model=g_model,
+                        contents=full_prompt
+                    )
+                    if resp and resp.text:
+                        return resp.text
+                except Exception as e:
+                    last_errors.append(f"Gemini ({g_model}): {str(e)}")
+                    if "503" in str(e) and attempt == 0:
+                        time.sleep(1.5)  # Αναμονή 1.5 δευτερόλεπτο και ξαναδοκιμή
+                        continue
+                    break
 
-    # 2. OpenRouter Fallback
+    # 2. OpenRouter Fallback (Ενεργά δωρεάν slugs)
     or_client = _get_openrouter_client(user_api_key)
     if or_client:
-        verified_free_models = [
-            "google/gemini-2.0-flash-lite-preview-02-05:free",
-            "qwen/qwen-2.5-72b-instruct:free",
-            "openrouter/free"
+        active_or_free_models = [
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "google/gemini-2.5-flash:free",
+            "openrouter/auto"
         ]
         
-        for model_name in verified_free_models:
+        for model_name in active_or_free_models:
             try:
                 response = or_client.chat.completions.create(
                     model=model_name,
@@ -86,8 +92,8 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
 
     err_msg = " | ".join(last_errors) if last_errors else "Δεν βρέθηκε διαθέσιμη AI μηχανή."
     return (
-        "⚠️ Προσωρινό σφάλμα AI μηχανής.\n\n"
-        "Παρακαλώ βεβαιωθείτε ότι υπάρχει έγκυρο API Key ή δοκιμάστε ξανά σε λίγο.\n"
+        "⚠️ Προσωρινή αυξημένη κίνηση στα AI μοντέλα.\n\n"
+        "Παρακαλώ πατήστε ξανά το κουμπί υπολογισμού σε λίγα δευτερόλεπτα.\n"
         f"*(Τεχνική λεπτομέρεια: {err_msg})*"
     )
 
@@ -103,44 +109,35 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
     - Όψεις: {aspects}
 
     ΟΔΗΓΙΕΣ ΣΥΝΤΑΞΗΣ:
-    1. ΜΗΝ ξεκινάς παραθέτοντας απλώς τη λίστα Ήλιου/Σελήνης/Ωροσκόπου (αυτά προβάλλονται ήδη σε ξεχωριστό πλαίσιο στην εφαρμογή).
+    1. ΜΗΝ ξεκινάς παραθέτοντας απλώς τη λίστα Ήλιου/Σελήνης/Ωροσκόπου.
     2. Ξεκίνα αμέσως την ουσιαστική ερμηνεία και σύνθεση του χάρτη.
-    3. Χώρισε την ανάλυση στις εξής ενότητες:
-       - **Προσωπικότητα & Συναισθηματικός Κόσμος:** Πώς αλληλεπιδρούν τα στοιχεία και οι κύριοι πλανήτες.
-       - **Έρωτας & Σχέσεις:** Η επιρροή της Αφροδίτης, του Άρη και των σχετικών οίκων.
-       - **Επαγγελματική Πορεία & Ευκαιρίες:** Προοπτικές, 10ος οίκος και θετικές/απαιτητικές όψεις.
-    4. Χρησιμοποίησε ζεστή, εκφραστική γλώσσα με ροή, σε άπταιστα Ελληνικά.
+    3. Χώρισε την ανάλυση σε:
+       - **Προσωπικότητα & Συναισθηματικός Κόσμος**
+       - **Έρωτας & Σχέσεις**
+       - **Επαγγελματική Πορεία & Ευκαιρίες**
+    4. Χρησιμοποίησε ζεστή, εκφραστική γλώσσα σε άπταιστα Ελληνικά.
     """
     return _generate_unified_response(prompt, user_api_key)
+
 def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
     prompt = f"""
-    Κάνε μια ζεστή, παραστατική και προσιτή ανάλυση μηνιαίων διελεύσεων για το προφίλ '{profile_name}' ({timeframe}) στο ύφος της Λίτσας Πατέρα και της Ισμήνης Καράλη.
-    
+    Κάνε μια ζεστή, παραστατική ανάλυση μηνιαίων διελεύσεων για το προφίλ '{profile_name}' ({timeframe}) στο ύφος της Λίτσας Πατέρα και της Ισμήνης Καράλη.
     Δεδομένα Διελεύσεων: {transits_data}
-    
-    Ανάλυσε τις ευκαιρίες, τις συναισθηματικές αυξομειώσεις και τις περιόδους προσοχής του μήνα.
     """
     return _generate_unified_response(prompt, user_api_key)
 
 def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el", user_api_key=""):
     prompt = f"""
-    Κάνε μια γλαφυρή, βαθιά και συναισθηματική ανάλυση συναστρίας μεταξύ {p1} και {p2} στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα.
-    
+    Κάνε μια γλαφυρή και συναισθηματική ανάλυση συναστρίας μεταξύ {p1} και {p2} στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα.
     Όψεις Συναστρίας: {synastry_aspects}
-    
-    Εστίασε στη χημεία, στις συναισθηματικές ισορροπίες, στον έρωτα και στα σημεία που χρειάζονται κατανόηση στη σχέση.
     """
     return _generate_unified_response(prompt, user_api_key)
 
 def ask_caterpillar_chat(context_text, user_prompt, lang="el", user_api_key=""):
     prompt = f"""
-    Απάντησε στην ερώτηση του χρήστη διατηρώντας το ζεστό, εκφραστικό και προσιτό ύφος αστρολογίας:
-    
-    Πλαίσιο:
-    {context_text}
-    
-    Ερώτηση Χρήστη:
-    {user_prompt}
+    Απάντησε στην ερώτηση του χρήστη διατηρώντας το ζεστό, εκφραστικό ύφος:
+    Πλαίσιο: {context_text}
+    Ερώτηση Χρήστη: {user_prompt}
     """
     return _generate_unified_response(prompt, user_api_key)
 
