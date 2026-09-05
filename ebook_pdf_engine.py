@@ -26,9 +26,12 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
     tz_name = GREEK_AND_WORLD_CITIES.get(city_name, {}).get("tz", "Europe/Athens")
 
     hour_decimal = b_time.hour + (b_time.minute / 60.0)
-    houses = calculate_houses(
-        b_date.year, b_date.month, b_date.day, hour_decimal, lat, lon, tz_name=tz_name
-    )
+    try:
+        houses = calculate_houses(
+            b_date.year, b_date.month, b_date.day, hour_decimal, lat, lon, tz_name=tz_name
+        )
+    except TypeError:
+        houses = calculate_houses(b_date.year, b_date.month, b_date.day, hour_decimal, lat, lon)
 
     positions_signs = {planet: get_sign_from_degrees(deg)[0] for planet, deg in natal_pos.items()}
     elements_pct, modalities_pct = calculate_elements_and_modalities(positions_signs)
