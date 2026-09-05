@@ -416,7 +416,6 @@ st.markdown("---")
     if st.button(btn_ai):
         from ai_engine import analyze_natal_chart_ai_stream
         
-        # Καλούμε το stream και το περνάμε στο write_stream
         stream_gen = analyze_natal_chart_ai_stream(
             selected_profile,
             str(raw_natal_pos),
@@ -457,7 +456,6 @@ st.markdown("---")
                 ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
                 st.session_state.chat_history["natal"].append({"role": "assistant", "content": ans})
                 st.rerun()
-
 # --- TAB 2: MONTHLY TRANSITS ---
 elif menu_choice.startswith("2."):
     st.header(f"📅 Μηνιαίες Διελεύσεις / Monthly Transits: {selected_profile}")
