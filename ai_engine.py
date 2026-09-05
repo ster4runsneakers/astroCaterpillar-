@@ -1,4 +1,4 @@
-# ai_engine.py - Optimized Free Tier & Fast Retry Engine
+# ai_engine.py - Stream-Enabled Engine
 import os
 import time
 import streamlit as st
@@ -22,44 +22,19 @@ def _get_gemini_client(user_api_key=""):
         return genai.Client(api_key=master_key)
     return None
 
-def _generate_unified_response(prompt: str, user_api_key: str = ""):
+def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
+    """
+    Generator function που επιστρέφει το κείμενο κομμάτι-κομμάτι (streaming) 
+    για να εμφανίζεται ακαριαία στο Streamlit UI.
+    """
     gem_client = _get_gemini_client(user_api_key)
-    
     if not gem_client:
-        return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets του Streamlit."
+        yield "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
+        return
 
-    # Μόνο σταθερά μοντέλα διαθέσιμα στο Free Tier
-    free_models = [
-        'gemini-2.5-flash',
-        'gemini-1.5-flash'
-    ]
-    
-    full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
-    last_errors = []
-
-    for g_model in free_models:
-        # Δοκιμή 2 φορές με ελάχιστη αναμονή (1s) μόνο για στιγμιαία 503
-        for attempt in range(2):
-            try:
-                resp = gem_client.models.generate_content(
-                    model=g_model,
-                    contents=full_prompt
-                )
-                if resp and resp.text:
-                    return resp.text
-            except Exception as e:
-                err_str = str(e)
-                last_errors.append(f"{g_model}: {err_str}")
-                if "503" in err_str and attempt == 0:
-                    time.sleep(1.0)
-                    continue
-                break
-
-    err_msg = " | ".join(last_errors) if last_errors else "Άγνωστο σφάλμα."
-    return f"⚠️ Στιγμιαίος φόρτος στις υποδομές AI. Παρακαλώ δοκιμάστε ξανά σε λίγα δευτερόλεπτα.\n*(Log: {err_msg})*"
-
-def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
+    {SYSTEM_PROMPT}
+
     Κάνε μια αναλυτική, ζεστή, γλαφυρή και βαθιά αστρολογική ανάλυση για το γενέθλιο προφίλ '{profile_name}', στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα.
 
     ΔΕΔΟΜΕΝΑ ΧΑΡΤΗ:
@@ -78,19 +53,43 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
        - **Πορεία Πεπρωμένου, Καριέρα & Ευκαιρίες**
     4. Γράψε σε άπταιστα Ελληνικά.
     """
-    return _generate_unified_response(prompt, user_api_key)
+
+    free_models = ['gemini-2.5-flash', 'gemini-1.5-flash']
+    
+    for g_model in free_models:
+        for attempt in range(2):
+            try:
+                response = gem_client.models.generate_content_stream(
+                    model=g_model,
+                    contents=prompt
+                )
+                for chunk in response:
+                    if chunk.text:
+                        yield chunk.text
+                return  # Επιτυχής ολοκλήρωση
+            except Exception as e:
+                if "503" in str(e) and attempt == 0:
+                    time.sleep(1.0)
+                    continue
+                break
+                
+    yield "⚠️ Στιγμιαίος φόρτος στις υποδομές AI. Παρακαλώ δοκιμάστε ξανά."
+
+def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
+    # Fallback μη-streaming κλήσης
+    full_text = ""
+    for chunk in analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang, user_api_key):
+        full_text += chunk
+    return full_text
 
 def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
-    prompt = f"Ανάλυση διελεύσεων για '{profile_name}' ({timeframe}): {transits_data}"
-    return _generate_unified_response(prompt, user_api_key)
+    return analyze_natal_chart_ai(profile_name, transits_data, {}, "", "", "", lang, user_api_key)
 
 def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el", user_api_key=""):
-    prompt = f"Ανάλυση συναστρίας {p1} & {p2}: {synastry_aspects}"
-    return _generate_unified_response(prompt, user_api_key)
+    return analyze_natal_chart_ai(f"{p1} & {p2}", synastry_aspects, {}, "", "", "", lang, user_api_key)
 
 def ask_caterpillar_chat(context_text, user_prompt, lang="el", user_api_key=""):
-    prompt = f"Πλαίσιο: {context_text}\nΕρώτηση: {user_prompt}"
-    return _generate_unified_response(prompt, user_api_key)
+    return analyze_natal_chart_ai("Chat", user_prompt, {}, "", "", "", lang, user_api_key)
 
 def clear_ai_cache():
     pass
