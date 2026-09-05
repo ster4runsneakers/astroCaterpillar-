@@ -409,15 +409,15 @@ if menu_choice.startswith("1."):
                 houses_formatted[f"Οίκος {h_num} / House {h_num}"] = f"{deg_in:.1f}° {sign_el} / {sign_en}"
             st.json(houses_formatted)
 
-    st.markdown("---")
+st.markdown("---")
     st.subheader("🤖 AstroCaterpillar AI Analysis")
     
     btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
     if st.button(btn_ai):
-        # Χρήση st.write_stream για ζωντανή παραγωγή κειμένου
         from ai_engine import analyze_natal_chart_ai_stream
         
-        stream_generator = analyze_natal_chart_ai_stream(
+        # Καλούμε το stream και το περνάμε στο write_stream
+        stream_gen = analyze_natal_chart_ai_stream(
             selected_profile,
             str(raw_natal_pos),
             str(houses),
@@ -427,18 +427,13 @@ if menu_choice.startswith("1."):
             lang=lang
         )
         
-        # Το st.write_stream εμφανίζει το κείμενο ζωντανά και επιστρέφει το πλήρες string στο τέλος
-        report = st.write_stream(stream_generator)
+        report = st.write_stream(stream_gen)
         st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
 
     cache_key = f"natal_ai_{selected_profile}_{lang}"
     if cache_key in st.session_state:
         report_text = st.session_state[cache_key]
         
-        # Αν η ανάλυση έχει ήδη παραχθεί προηγουμένως και βρίσκεται στο cache, την εμφανίζουμε
-        if not st.session_state.get(f"just_generated_{selected_profile}"):
-            st.markdown(report_text)
-            
         st.download_button(
             label="📥 Download AI Report (.txt)",
             data=report_text,
@@ -449,7 +444,6 @@ if menu_choice.startswith("1."):
         st.markdown("---")
         st.subheader("💬 Chat με τον AstroCaterpillar (Γενέθλιος Χάρτης)")
         
-        # Display history
         for msg in st.session_state.chat_history["natal"]:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
