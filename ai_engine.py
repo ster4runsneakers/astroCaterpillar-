@@ -1,4 +1,4 @@
-# ai_engine.py - Bulletproof Model Selection
+# ai_engine.py - Updated to Gemini 3.6 Flash
 import os
 import time
 import streamlit as st
@@ -52,8 +52,7 @@ def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, 
     4. Γράψε σε άπταιστα Ελληνικά.
     """
 
-    # Δοκιμή αποκλειστικά των νέων Flash μοντέλων
-    for m_name in ['gemini-2.5-flash', 'gemini-2.0-flash']:
+    for m_name in ['gemini-3.6-flash', 'gemini-2.5-flash']:
         try:
             response = client.models.generate_content_stream(
                 model=m_name,
@@ -81,7 +80,7 @@ def _run_genai_call(prompt: str, user_api_key: str = ""):
     )
 
     last_err = ""
-    for m_name in ['gemini-2.5-flash', 'gemini-2.0-flash']:
+    for m_name in ['gemini-3.6-flash', 'gemini-2.5-flash']:
         try:
             response = client.models.generate_content(
                 model=m_name,
