@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Includes Persistent Multi-turn Chat for Transits & Synastry)
+# app.py - AstroCaterpillar Micro-App (Includes Persistent Multi-turn Chat, Rate Limiting & User API Keys)
 import datetime
 import json
 import sqlite3
@@ -213,14 +213,32 @@ if "is_admin" not in st.session_state:
 if "guest_profiles" not in st.session_state:
     st.session_state.guest_profiles = {}
 
-# Chat memory stores per category
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = {"natal": [], "transits": [], "synastry": []}
 
-# --- LANGUAGE SELECTOR ---
+if "ai_usage_count" not in st.session_state:
+    st.session_state.ai_usage_count = 0
+
+MAX_FREE_ANALYSES = 3
+
+# --- LANGUAGE SELECTOR & API KEY IN SIDEBAR ---
 st.sidebar.title("🐛 AstroCaterpillar")
 lang_choice = st.sidebar.selectbox("🌐 Γλώσσα / Language", ["Ελληνικά", "English"])
 lang = "el" if lang_choice == "Ελληνικά" else "en"
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔑 Ρυθμίσεις API")
+user_gemini_key = st.sidebar.text_input(
+    "Το Gemini API Key σου (Προαιρετικό):",
+    type="password",
+    help="Εισάγετε το δικό σας δωρεάν key από το Google AI Studio για απεριόριστη χρήση."
+)
+
+if not user_gemini_key:
+    rem_calls = max(0, MAX_FREE_ANALYSES - st.session_state.ai_usage_count)
+    st.sidebar.caption(f"💡 Δωρεάν αναλύσεις συνεδρίας: **{rem_calls}/{MAX_FREE_ANALYSES}**")
+else:
+    st.sidebar.success("🟢 Χρήση προσωπικού API Key (Απεριόριστες αναλύσεις)")
 
 # --- PROFILE SOURCE CONTROLLER ---
 if st.session_state.is_admin:
@@ -327,11 +345,7 @@ if menu_choice.startswith("1."):
     lat = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("lat", 37.9838)
     lon = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("lon", 23.7275)
     
-    # Μετατροπή Τοπικής Ώρας σε UTC για ακριβή υπολογισμό Ωροσκόπου
-    # Για την Ελλάδα (EET/EEST): UTC+2 τον χειμώνα, UTC+3 το καλοκαίρι
-    # Υπολογισμός UTC hour_decimal:
-    tz_offset = 2.0  # Προεπιλογή χειμερινής ώρας
-    # Αν η ημερομηνία είναι εντός θερινής ώρας (Απρίλιος - Οκτώβριος)
+    tz_offset = 2.0
     if 3 < b_date.month < 11:
         tz_offset = 3.0
         
@@ -360,7 +374,6 @@ if menu_choice.startswith("1."):
         st.subheader("📊 Βασικοί Δείκτες / Key Indicators")
         st.write(f"**Ημερομηνία / Date:** {b_date.strftime('%d/%m/%Y')} {b_time.strftime('%H:%M')} ({city_name_el} / {city_name_en})")
         
-        # --- ΝΕΟ ΠΛΑΙΣΙΟ: Η ΑΣΤΡΟΛΟΓΙΚΗ ΤΡΙΑΔΑ ---
         sun_deg = natal_pos.get("Sun", 0.0)
         moon_deg = natal_pos.get("Moon", 0.0)
         asc_deg = houses.get("House_1", 0.0)
@@ -414,33 +427,40 @@ if menu_choice.startswith("1."):
 
     btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
     if st.button(btn_ai):
-        with st.spinner("🔮 Ο AstroCaterpillar αναλύει τον χάρτη σου... Παρακαλώ περίμενε..."):
-            try:
-                from ai_engine import analyze_natal_chart_ai_stream
-                stream_gen = analyze_natal_chart_ai_stream(
-                    selected_profile,
-                    str(raw_natal_pos),
-                    str(houses),
-                    str(cz_data),
-                    f"Elements: {elements_pct}, Modalities: {modalities_pct}",
-                    str(aspects),
-                    lang=lang
-                )
-                report = st.write_stream(stream_gen)
-            except Exception:
-                from ai_engine import analyze_natal_chart_ai
-                report = analyze_natal_chart_ai(
-                    selected_profile,
-                    str(raw_natal_pos),
-                    str(houses),
-                    str(cz_data),
-                    f"Elements: {elements_pct}, Modalities: {modalities_pct}",
-                    str(aspects),
-                    lang=lang
-                )
-                st.markdown(report)
+        if st.session_state.ai_usage_count >= MAX_FREE_ANALYSES and not user_gemini_key:
+            st.error("⚠️ Φτάσατε το συνολικό όριο των 3 δωρεάν αναλύσεων. Παρακαλώ καταχωρίστε το δικό σας Gemini API Key στο Sidebar για να συνεχίσετε!")
+        else:
+            with st.spinner("🔮 Ο AstroCaterpillar αναλύει τον χάρτη σου... Παρακαλώ περίμενε..."):
+                try:
+                    from ai_engine import analyze_natal_chart_ai_stream
+                    stream_gen = analyze_natal_chart_ai_stream(
+                        selected_profile,
+                        str(raw_natal_pos),
+                        str(houses),
+                        str(cz_data),
+                        f"Elements: {elements_pct}, Modalities: {modalities_pct}",
+                        str(aspects),
+                        lang=lang,
+                        user_api_key=user_gemini_key
+                    )
+                    report = st.write_stream(stream_gen)
+                except Exception:
+                    report = analyze_natal_chart_ai(
+                        selected_profile,
+                        str(raw_natal_pos),
+                        str(houses),
+                        str(cz_data),
+                        f"Elements: {elements_pct}, Modalities: {modalities_pct}",
+                        str(aspects),
+                        lang=lang,
+                        user_api_key=user_gemini_key
+                    )
+                    st.markdown(report)
 
-            st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
+                if not user_gemini_key:
+                    st.session_state.ai_usage_count += 1
+
+                st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
 
     cache_key = f"natal_ai_{selected_profile}_{lang}"
     if cache_key in st.session_state:
@@ -466,9 +486,10 @@ if menu_choice.startswith("1."):
             with st.spinner("Σκέφτεται... / Thinking..."):
                 history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["natal"]])
                 full_prompt = f"Αρχική Ανάλυση:\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
+                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_gemini_key)
                 st.session_state.chat_history["natal"].append({"role": "assistant", "content": ans})
                 st.rerun()
+
 # --- TAB 2: MONTHLY TRANSITS ---
 elif menu_choice.startswith("2."):
     st.header(f"📅 Μηνιαίες Διελεύσεις / Monthly Transits: {selected_profile}")
@@ -494,11 +515,18 @@ elif menu_choice.startswith("2."):
     timeframe_label = f"{sel_month_name} {sel_year}"
     
     if st.button("🔮 Στρατηγική Ανάλυση Μήνα / Analyze Monthly Trends"):
-        with st.spinner("Υπολογισμός Μακρο-Κύκλων... / Calculating Macro Cycles..."):
-            natal_degrees = {p: extract_deg(v) for p, v in prof_data["positions"].items()}
-            m_transits = calculate_monthly_transits(natal_degrees, sel_year, sel_month_num)
-            report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang)
-            st.session_state[f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"] = report
+        if st.session_state.ai_usage_count >= MAX_FREE_ANALYSES and not user_gemini_key:
+            st.error("⚠️ Φτάσατε το συνολικό όριο των 3 δωρεάν αναλύσεων. Παρακαλώ καταχωρίστε το δικό σας Gemini API Key στο Sidebar για να συνεχίσετε!")
+        else:
+            with st.spinner("Υπολογισμός Μακρο-Κύκλων... / Calculating Macro Cycles..."):
+                natal_degrees = {p: extract_deg(v) for p, v in prof_data["positions"].items()}
+                m_transits = calculate_monthly_transits(natal_degrees, sel_year, sel_month_num)
+                report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang, user_api_key=user_gemini_key)
+                
+                if not user_gemini_key:
+                    st.session_state.ai_usage_count += 1
+                    
+                st.session_state[f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"] = report
 
     t_cache_key = f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"
     if t_cache_key in st.session_state:
@@ -525,11 +553,10 @@ elif menu_choice.startswith("2."):
             with st.spinner("Σκέφτεται... / Thinking..."):
                 history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["transits"]])
                 full_prompt = f"Αρχική Ανάλυση Διελεύσεων ({timeframe_label}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
+                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_gemini_key)
                 st.session_state.chat_history["transits"].append({"role": "assistant", "content": ans})
                 st.rerun()
 
-# --- TAB 3: SYNASTRY ---
 # --- TAB 3: SYNASTRY ---
 elif menu_choice.startswith("3."):
     st.header("💞 Συναστρία / Synastry")
@@ -542,17 +569,23 @@ elif menu_choice.startswith("3."):
         
         if p1 != p2:
             if st.button("💖 Υπολογισμός Συναστρίας / Calculate Synastry"):
-                pos1 = {p: extract_deg(v) for p, v in saved_profiles[p1]["positions"].items()}
-                pos2 = {p: extract_deg(v) for p, v in saved_profiles[p2]["positions"].items()}
-                syn_aspects = calculate_synastry_aspects(pos1, pos2)
-                
-                # Διαδραστικό Plotly Χάρτης Συναστρίας (Hover/Touch)
-                syn_fig = create_interactive_synastry_plotly(pos1, pos2, name1=p1, name2=p2, lang=lang)
-                st.plotly_chart(syn_fig, use_container_width=True)
-                
-                with st.spinner("Ανάλυση... / Analyzing..."):
-                    report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang)
-                    st.session_state[f"synastry_ai_{p1}_{p2}_{lang}"] = report
+                if st.session_state.ai_usage_count >= MAX_FREE_ANALYSES and not user_gemini_key:
+                    st.error("⚠️ Φτάσατε το συνολικό όριο των 3 δωρεάν αναλύσεων. Παρακαλώ καταχωρίστε το δικό σας Gemini API Key στο Sidebar για να συνεχίσετε!")
+                else:
+                    pos1 = {p: extract_deg(v) for p, v in saved_profiles[p1]["positions"].items()}
+                    pos2 = {p: extract_deg(v) for p, v in saved_profiles[p2]["positions"].items()}
+                    syn_aspects = calculate_synastry_aspects(pos1, pos2)
+                    
+                    syn_fig = create_interactive_synastry_plotly(pos1, pos2, name1=p1, name2=p2, lang=lang)
+                    st.plotly_chart(syn_fig, use_container_width=True)
+                    
+                    with st.spinner("Ανάλυση... / Analyzing..."):
+                        report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang, user_api_key=user_gemini_key)
+                        
+                        if not user_gemini_key:
+                            st.session_state.ai_usage_count += 1
+                            
+                        st.session_state[f"synastry_ai_{p1}_{p2}_{lang}"] = report
 
             s_cache_key = f"synastry_ai_{p1}_{p2}_{lang}"
             if s_cache_key in st.session_state:
@@ -595,7 +628,7 @@ elif menu_choice.startswith("3."):
                     with st.spinner("Σκέφτεται... / Thinking..."):
                         history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["synastry"]])
                         full_prompt = f"Αρχική Ανάλυση Συναστρίας ({p1} & {p2}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                        ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
+                        ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang, user_api_key=user_gemini_key)
                         st.session_state.chat_history["synastry"].append({"role": "assistant", "content": ans})
                         st.rerun()
 
