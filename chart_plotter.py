@@ -2,6 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+from cities_el import PLANET_TRANSLATIONS
 
 PLANET_SYMBOLS = {
     "Sun": "☉", "Moon": "☽", "Mercury": "☿", "Venus": "♀",
@@ -288,7 +289,7 @@ def create_interactive_synastry_plotly(pos1, pos2, name1="Άτομο 1", name2="
             angularaxis=dict(
                 direction="counterclockwise",
                 period=360,
-                rotation=0,
+                rotation=180,
                 linecolor="#334155",
                 gridcolor="#1E293B"
             )
