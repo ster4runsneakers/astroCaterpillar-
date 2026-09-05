@@ -133,28 +133,58 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap');
-.stApp { background: radial-gradient(1200px 600px at 12% -10%, #1e3a5f 0%, #0B1220 42%, #070B14 100%); }
+html, body, [class*="css"] { font-family: 'Source Sans 3', sans-serif; }
+.stApp {
+  background:
+    radial-gradient(900px 480px at 8% -8%, rgba(56,89,140,.45), transparent 55%),
+    radial-gradient(700px 420px at 100% 0%, rgba(88,28,135,.18), transparent 50%),
+    #070B14;
+  color: #E2E8F0;
+}
+.block-container { padding-top: 1.4rem; padding-bottom: 2.5rem; max-width: 1280px; }
+#MainMenu, footer, header { visibility: hidden; }
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #0C1524 0%, #0A101C 100%);
+  border-right: 1px solid rgba(148,163,184,.12);
+}
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: #F1F5F9; }
+.stButton>button {
+  background: linear-gradient(180deg, #3B82F6 0%, #2563EB 100%);
+  color: #fff; border: 0; border-radius: 12px;
+  padding: .55rem 1rem; font-weight: 600; letter-spacing: .01em;
+  box-shadow: 0 8px 24px rgba(37,99,235,.25);
+}
+.stButton>button:hover { filter: brightness(1.08); }
+.stDownloadButton>button {
+  background: #0F172A; color: #93C5FD;
+  border: 1px solid rgba(147,197,253,.35); border-radius: 12px;
+}
+div[data-testid="stTextInput"] input,
+div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+div[data-testid="stDateInput"] input {
+  background: #0F172A !important; border-radius: 10px !important;
+  border: 1px solid rgba(148,163,184,.22) !important; color: #F8FAFC !important;
+}
+h1, h2, h3 { font-family: 'Cormorant Garamond', serif; color: #F8FAFC; letter-spacing: -.02em; }
+.stRadio > label { color: #CBD5E1; }
+[data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
 .ac-hero {
-    background: linear-gradient(160deg, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.35) 100%);
-    border: 1px solid rgba(147,197,253,0.18);
-    border-radius: 22px;
-    padding: 2.2rem 2rem 1.8rem 2rem;
-    margin-bottom: 1.2rem;
+  background: linear-gradient(155deg, rgba(30,58,95,.62) 0%, rgba(15,23,42,.28) 100%);
+  border: 1px solid rgba(147,197,253,.16);
+  border-radius: 24px; padding: 2.3rem 2rem 1.9rem; margin-bottom: 1.15rem;
 }
-.ac-kicker { color:#93C5FD; letter-spacing:.18em; font-size:.78rem; font-weight:600; text-transform:uppercase; margin:0 0 .4rem 0; font-family:'Source Sans 3',sans-serif; }
-.ac-title { font-family:'Cormorant Garamond',serif; font-size:3rem; line-height:1.05; color:#F8FAFC; margin:0 0 .6rem 0; }
-.ac-sub { color:#CBD5E1; font-size:1.05rem; line-height:1.55; max-width:46rem; font-family:'Source Sans 3',sans-serif; }
+.ac-kicker { color:#93C5FD; letter-spacing:.2em; font-size:.72rem; font-weight:600; text-transform:uppercase; margin:0 0 .45rem 0; }
+.ac-title { font-family:'Cormorant Garamond',serif; font-size:clamp(2.2rem,5vw,3.15rem); line-height:1.05; color:#F8FAFC; margin:0 0 .55rem 0; }
+.ac-sub { color:#CBD5E1; font-size:1.05rem; line-height:1.6; max-width:46rem; }
 .ac-card {
-    background: rgba(15,23,42,0.72);
-    border: 1px solid rgba(148,163,184,0.16);
-    border-radius: 16px;
-    padding: 1.15rem 1.1rem 1.05rem 1.1rem;
-    height: 100%;
+  background: rgba(15,23,42,.78);
+  border: 1px solid rgba(148,163,184,.14);
+  border-radius: 16px; padding: 1.15rem 1.1rem; height: 100%;
 }
-.ac-card h3 { font-family:'Cormorant Garamond',serif; color:#E0E7FF; font-size:1.35rem; margin:0 0 .35rem 0; }
-.ac-card p { color:#94A3B8; font-size:.92rem; margin:0; line-height:1.5; font-family:'Source Sans 3',sans-serif; }
-.ac-step { color:#64748B; font-size:.75rem; letter-spacing:.12em; text-transform:uppercase; margin:0 0 .25rem 0; }
-.ac-foot { color:#64748B; font-size:.85rem; text-align:center; margin-top:1.4rem; }
+.ac-card h3 { font-family:'Cormorant Garamond',serif; color:#E0E7FF; font-size:1.32rem; margin:0 0 .35rem 0; }
+.ac-card p { color:#94A3B8; font-size:.92rem; margin:0; line-height:1.5; }
+.ac-step { color:#64748B; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; margin:0 0 .25rem 0; }
+.ac-foot { color:#64748B; font-size:.85rem; text-align:center; margin-top:1.5rem; line-height:1.55; }
 </style>
 """, unsafe_allow_html=True)
 
