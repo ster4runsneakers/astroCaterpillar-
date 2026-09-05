@@ -1,54 +1,101 @@
-# ai_engine.py - AstroCaterpillar AI Engine (Updated Model Names & Robust Fallback)
+# ai_engine.py - AstroCaterpillar Engine (Warm Expressive Style: Karali / Patera)
 import os
 import streamlit as st
 from google import genai
+from openai import OpenAI
 
-# Λίστα ενεργών μοντέλων για το google-genai SDK
-PRIMARY_MODEL = 'gemini-2.5-flash'
-FALLBACK_MODELS = ['gemini-1.5-flash', 'gemini-2.5-pro']
+SYSTEM_PROMPT = (
+    "Είσαι ένας έμπειρος, ζεστός, επικοινωνιακός και παραστατικός αστρολόγος, στο ύφος και τη φιλοσοφία της κλασικής ελληνικής αστρολογίας (όπως η Ισμήνη Καράλη και η Λίτσα Πατέρα). "
+    "Ο λόγος σου είναι εκφραστικός, με συναισθηματική ροή, ενθαρρυντικός και προσιτός, χωρίς όμως να χάνει την αστρολογική του ακρίβεια. "
+    "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες και αριθμούς. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα σε μια ολοκληρωμένη εικόνα."
+)
 
-def _get_client():
-    api_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-    if not api_key:
-        return None
-    return genai.Client(api_key=api_key)
-
-def _generate_with_fallback(client, prompt):
-    """
-    Δοκιμάζει το Primary Model. Αν αποτύχει λόγω Quota/Rate Limit (429) ή 404,
-    μεταβαίνει αυτόματα στα διαθέσιμα Fallback μοντέλα.
-    """
-    models_to_try = [PRIMARY_MODEL] + FALLBACK_MODELS
+def _get_openrouter_client(user_api_key=""):
+    clean_user_key = user_api_key.strip() if user_api_key else ""
+    if clean_user_key and clean_user_key.startswith("sk-or-"):
+        return OpenAI(api_key=clean_user_key, base_url="https://openrouter.ai/api/v1")
     
-    last_error = ""
-    for model_name in models_to_try:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-            )
-            return response.text
-        except Exception as e:
-            last_error = str(e)
-            # Αν είναι σφάλμα ορίου (429/RESOURCE_EXHAUSTED) ή 404, δοκιμάζουμε το επόμενο μοντέλο
-            if any(err_code in last_error for err_code in ["429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND"]):
-                continue
-            else:
-                break
+    master_key = (
+        st.secrets.get("OPENROUTER_API_KEY", "") or 
+        st.secrets.get("DEEPSEEK_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
+    ).strip()
+    
+    if master_key:
+        return OpenAI(api_key=master_key, base_url="https://openrouter.ai/api/v1")
+    return None
 
+def _get_gemini_client(user_api_key=""):
+    clean_user_key = user_api_key.strip() if user_api_key else ""
+    if clean_user_key and not clean_user_key.startswith("sk-"):
+        return genai.Client(api_key=clean_user_key)
+    
+    master_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", "")).strip()
+    if master_key:
+        return genai.Client(api_key=master_key)
+    return None
+
+def _generate_unified_response(prompt: str, user_api_key: str = ""):
+    last_errors = []
+
+    # 1. Gemini Direct
+    gem_client = _get_gemini_client(user_api_key)
+    if gem_client:
+        gemini_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+        full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
+        
+        for g_model in gemini_models:
+            try:
+                resp = gem_client.models.generate_content(
+                    model=g_model,
+                    contents=full_prompt
+                )
+                if resp and resp.text:
+                    return resp.text
+            except Exception as e:
+                last_errors.append(f"Gemini ({g_model}): {str(e)}")
+                continue
+
+    # 2. OpenRouter Fallback
+    or_client = _get_openrouter_client(user_api_key)
+    if or_client:
+        verified_free_models = [
+            "google/gemini-2.0-flash-lite-preview-02-05:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "openrouter/free"
+        ]
+        
+        for model_name in verified_free_models:
+            try:
+                response = or_client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt}
+                    ],
+                    extra_headers={
+                        "HTTP-Referer": "https://astrocaterpillar.streamlit.app",
+                        "X-Title": "AstroCaterpillar AI"
+                    },
+                    stream=False
+                )
+                if response and response.choices and response.choices[0].message.content:
+                    return response.choices[0].message.content
+            except Exception as e:
+                last_errors.append(f"OpenRouter ({model_name}): {str(e)}")
+                continue
+
+    err_msg = " | ".join(last_errors) if last_errors else "Δεν βρέθηκε διαθέσιμη AI μηχανή."
     return (
-        "⚠️ Το ημερήσιο όριο (Quota) εξαντλήθηκε στο τρέχον API Key.\n\n"
-        "**Λύσεις:**\n"
-        "1. Περίμενε να μηδενιστεί ο ημερήσιος μετρητής της Google.\n"
-        "2. Δημιούργησε ένα νέο δωρεάν API Key από το [Google AI Studio](https://aistudio.google.com/) "
-        "και αντικατάστησέ το στα Streamlit Secrets (`GEMINI_API_KEY`)."
+        "⚠️ Προσωρινό σφάλμα AI μηχανής.\n\n"
+        "Παρακαλώ βεβαιωθείτε ότι υπάρχει έγκυρο API Key ή δοκιμάστε ξανά σε λίγο.\n"
+        f"*(Τεχνική λεπτομέρεια: {err_msg})*"
     )
 
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
-    Κάνε μια αναλυτική, ζεστή και παραστατική αστρολογική ανάλυση για το γενέθλιο προφίλ '{profile_name}', στο ύφος και τη φιλοσοφία της κλασικής, επικοινωνιακής αστρολογίας (όπως η Ισμήνη Καράλη και η Λίτσα Πατέρα).
+    Κάνε μια αναλυτική, ζεστή, γλαφυρή και παραστατική αστρολογική ανάλυση για το γενέθλιο προφίλ '{profile_name}', στο ύφος και τη φιλοσοφία της κλασικής, αγαπημένης ελληνικής αστρολογίας (όπως η Ισμήνη Καράλη και η Λίτσα Πατέρα).
 
-    ΔΕΔΟΜΕΝΑ:
+    ΔΕΔΟΜΕΝΑ ΧΑΡΤΗ:
     - Θέσεις Πλανητών: {raw_positions}
     - Οίκοι: {houses}
     - Κινεζικό Ζώδιο: {cz_data}
@@ -56,67 +103,55 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
     - Όψεις: {aspects}
 
     ΔΟΜΗ ΑΠΑΝΤΗΣΗΣ:
-    1. **ΒΑΣΙΚΗ ΤΡΙΑΔΑ ΧΑΡΤΗ:**
-       Ξεκίνα υποχρεωτικά αναφέροντας καθαρά:
+    1. **Η ΑΣΤΡΟΛΟΓΙΚΗ ΤΡΙΑΔΑ ΤΟΥ ΠΡΟΦΙΛ:**
+       Ξεκίνα ΥΠΟΧΡΕΩΤΙΚΑ αναφέροντας καθαρά στην αρχή:
        - ☀️ **Ήλιος:** [Ζώδιο & Οίκος]
        - 🌙 **Σελήνη:** [Ζώδιο & Οίκος]
        - 🌅 **Ωροσκόπος:** [Ζώδιο & 1ος Οίκος]
 
-    2. **ΟΙ 3 ΑΞΟΝΕΣ ΤΗΣ ΑΝΑΛΥΣΗΣ:**
-       - **Προσωπικότητα & Συναισθηματικός Κόσμος:** Πώς συνδυάζεται ο Ήλιος, η Σελήνη και ο Ωροσκόπος.
-       - **Έρωτας, Σχέσεις & Δημιουργικότητα:** Η επιρροή της Αφροδίτης, του Άρη και του 5ου/7ου Οίκου.
-       - **Επαγγελματικά, Ευκαιρίες & Προκλήσεις:** Η πορεία προς την επιτυχία, ο 10ος Οίκος και οι δυνατές όψεις του Κρόνου/Δία.
+    2. **ΟΙ ΑΞΟΝΕΣ ΤΗΣ ΑΝΑΛΥΣΗΣ:**
+       - **Προσωπικότητα, Ψυχισμός & Εκφραστικότητα:** Πώς συνδέονται ο Ήλιος, η Σελήνη και ο Ωροσκόπος.
+       - **Έρωτας, Σχέσεις & Συναισθήματα:** Η επιρροή της Αφροδίτης, του Άρη και των σχετικών οίκων.
+       - **Επαγγελματική Πορεία, Ευκαιρίες & Κάρμα:** Η διαδρομή προς την επιτυχία, οι προκλήσεις και οι ευκαιρίες του χάρτη.
 
     ΟΔΗΓΙΕΣ ΥΦΟΥΣ:
-    - Χρησιμοποίησε ζωντανή, εκφραστική γλώσσα με ροή, που αγγίζει τον αναγνώστη.
-    - ΜΗΝ παραθέτεις απλώς μοίρες και αριθμούς σε λίστα. Ερμήνευσε τι σημαίνουν οι όψεις για τη ζωή και την προσωπικότητα του ατόμου.
+    - Χρησιμοποίησε ζωντανή, εκφραστική γλώσσα που αγγίζει τον αναγνώστη.
+    - ΜΗΝ παραθέτεις στεγνές λίστες με μοίρες. Ερμήνευσε τη σημασία τους για τη ζωή του ατόμου.
     - Γράψε σε άπταιστα Ελληνικά.
     """
     return _generate_unified_response(prompt, user_api_key)
-def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el"):
-    client = _get_client()
-    if not client:
-        return "⚠️ Σφάλμα: Δεν βρέθηκε το `GEMINI_API_KEY`."
 
+def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
     prompt = f"""
-    Είσαι ο Caterpillar. Κάνε μια αναλυτική, δεδομενοκεντρική στρατηγική ανάλυση μηνιαίων διελεύσεων για το προφίλ '{profile_name}' ({timeframe}):
+    Κάνε μια ζεστή, παραστατική και προσιτή ανάλυση μηνιαίων διελεύσεων για το προφίλ '{profile_name}' ({timeframe}) στο ύφος της Λίτσας Πατέρα και της Ισμήνης Καράλη.
+    
     Δεδομένα Διελεύσεων: {transits_data}
     
-    Γλώσσα απάντησης: {'Ελληνικά' if lang == 'el' else 'English'}.
+    Ανάλυσε τις ευκαιρίες, τις συναισθηματικές αυξομειώσεις και τις περιόδους προσοχής του μήνα.
     """
-    
-    return _generate_with_fallback(client, prompt)
+    return _generate_unified_response(prompt, user_api_key)
 
-def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el"):
-    client = _get_client()
-    if not client:
-        return "⚠️ Σφάλμα: Δεν βρέθηκε το `GEMINI_API_KEY`."
-
+def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el", user_api_key=""):
     prompt = f"""
-    Είσαι ο Caterpillar. Κάνε μια ουδέτερη και διαισθητική ανάλυση συναστρίας μεταξύ {p1} και {p2}:
+    Κάνε μια γλαφυρή, βαθιά και συναισθηματική ανάλυση συναστρίας μεταξύ {p1} και {p2} στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα.
+    
     Όψεις Συναστρίας: {synastry_aspects}
     
-    Γλώσσα απάντησης: {'Ελληνικά' if lang == 'el' else 'English'}.
+    Εστίασε στη χημεία, στις συναισθηματικές ισορροπίες, στον έρωτα και στα σημεία που χρειάζονται κατανόηση στη σχέση.
     """
-    
-    return _generate_with_fallback(client, prompt)
+    return _generate_unified_response(prompt, user_api_key)
 
-def ask_caterpillar_chat(context_text, user_prompt, lang="el"):
-    client = _get_client()
-    if not client:
-        return "⚠️ Σφάλμα: Δεν βρέθηκε το `GEMINI_API_KEY`."
-
-    full_query = f"""
-    Είσαι ο Caterpillar. Απάντησε στην ερώτηση του χρήστη με βάση το παρακάτω πλαίσιο και ιστορικό, διατηρώντας ουδέτερο και δεδομενοκεντρικό ύφος.
+def ask_caterpillar_chat(context_text, user_prompt, lang="el", user_api_key=""):
+    prompt = f"""
+    Απάντησε στην ερώτηση του χρήστη διατηρώντας το ζεστό, εκφραστικό και προσιτό ύφος αστρολογίας:
     
-    Πλαίσιο / Ιστορικό:
+    Πλαίσιο:
     {context_text}
     
     Ερώτηση Χρήστη:
     {user_prompt}
     """
-    
-    return _generate_with_fallback(client, full_query)
+    return _generate_unified_response(prompt, user_api_key)
 
 def clear_ai_cache():
     pass
