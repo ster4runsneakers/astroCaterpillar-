@@ -1,4 +1,4 @@
-# ai_engine.py - Direct REST API (Fixed Case-Sensitive Import)
+# ai_engine.py - Updated to Gemini 3.6 Flash REST API
 import os
 import requests
 import streamlit as st
@@ -20,7 +20,8 @@ def _run_direct_rest_call(prompt: str, user_api_key: str = ""):
     if not api_key:
         return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
 
-    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash"]
+    # Νέα ενημερωμένα μοντέλα παραγωγής
+    models_to_try = ["gemini-3.6-flash", "gemini-2.5-flash"]
     last_err = ""
 
     for model_name in models_to_try:
