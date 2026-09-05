@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 # --- INTERNAL IMPORTS ---
 from cities_el import GREEK_AND_WORLD_CITIES, ZODIAC_SIGNS, PLANET_TRANSLATIONS
-from ephemeris_engine import calculate_natal_positions, calculate_houses, extract_deg as _extract_deg
+from ephemeris_engine import calculate_natal_positions, calculate_houses
 from interpretations_el import get_sign_from_degrees
 from elements_engine import calculate_elements_and_modalities
 from natal_aspects_engine import calculate_natal_aspects
@@ -311,7 +311,12 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
 prof_data = saved_profiles.get(selected_profile, {})
 
 def extract_deg(val):
-    return _extract_deg(val)
+    if isinstance(val, dict):
+        return float(val.get("deg", 0.0))
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
 
 # --- TAB 1: NATAL CHART ---
 if menu_choice.startswith("1."):
