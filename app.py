@@ -414,20 +414,33 @@ if menu_choice.startswith("1."):
 
     btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
     if st.button(btn_ai):
-        from ai_engine import analyze_natal_chart_ai_stream
+        with st.spinner("🔮 Ο AstroCaterpillar αναλύει τον χάρτη σου... Παρακαλώ περίμενε..."):
+            try:
+                from ai_engine import analyze_natal_chart_ai_stream
+                stream_gen = analyze_natal_chart_ai_stream(
+                    selected_profile,
+                    str(raw_natal_pos),
+                    str(houses),
+                    str(cz_data),
+                    f"Elements: {elements_pct}, Modalities: {modalities_pct}",
+                    str(aspects),
+                    lang=lang
+                )
+                report = st.write_stream(stream_gen)
+            except Exception:
+                from ai_engine import analyze_natal_chart_ai
+                report = analyze_natal_chart_ai(
+                    selected_profile,
+                    str(raw_natal_pos),
+                    str(houses),
+                    str(cz_data),
+                    f"Elements: {elements_pct}, Modalities: {modalities_pct}",
+                    str(aspects),
+                    lang=lang
+                )
+                st.markdown(report)
 
-        stream_gen = analyze_natal_chart_ai_stream(
-            selected_profile,
-            str(raw_natal_pos),
-            str(houses),
-            str(cz_data),
-            f"Elements: {elements_pct}, Modalities: {modalities_pct}",
-            str(aspects),
-            lang=lang
-        )
-
-        report = st.write_stream(stream_gen)
-        st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
+            st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
 
     cache_key = f"natal_ai_{selected_profile}_{lang}"
     if cache_key in st.session_state:
