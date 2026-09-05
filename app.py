@@ -97,7 +97,7 @@ ELEMENTS_GUIDE = {
 }
 
 MODALITIES_GUIDE = {
-    "⚡ Παρορμητικά / Cardinal": "Η Αρχή & η Πρωτοβουλία. Ανοίγουν νέους δρόμους, ξεκινούν έργα, θέτουν στόχους.",
+    "⚡ Παρορμητικά / Cardinal": "Η Αρχή & η Πρωτοβουλία. Ανοίγουν νέους δρόμους, ξεκινούν έργα, θέτουν στόχοι.",
     "🏛️ Σταθερά / Fixed": "Η Διατήρηση & η Θεμελίωση. Συγκεντρώνουν, σταθεροποιούν και προστατεύουν με αφοσίωση.",
     "🌀 Μεταβλητά / Mutable": "Η Προσαρμογή & η Μετάβαση. Προσαρμόζονται, βελτιώνουν, διορθώνουν και εξελίσσουν."
 }
@@ -253,10 +253,22 @@ st.sidebar.subheader(t_profiles_header)
 
 profile_names = list(saved_profiles.keys())
 new_prof_label = "-- Νέο Προφίλ / New Profile --"
+all_options = [new_prof_label] + profile_names
+
+if "sidebar_selected_profile" not in st.session_state:
+    st.session_state.sidebar_selected_profile = new_prof_label
+
+# Υπολογισμός index για να συγχρονίζεται η επιλογή της sidebar με το state
+current_index = 0
+if st.session_state.sidebar_selected_profile in all_options:
+    current_index = all_options.index(st.session_state.sidebar_selected_profile)
+
 selected_profile = st.sidebar.selectbox(
     "Επιλογή Προφίλ / Select Profile:",
-    [new_prof_label] + profile_names
+    all_options,
+    index=current_index
 )
+st.session_state.sidebar_selected_profile = selected_profile
 
 if selected_profile == new_prof_label:
     exp_title = "➕ Προσθήκη Προφίλ / Add Profile"
@@ -291,6 +303,7 @@ if selected_profile == new_prof_label:
                     st.session_state.guest_profiles[new_name.strip()] = {
                         "date": new_date, "time": new_time, "city": selected_city_key, "positions": pos
                     }
+                st.session_state.sidebar_selected_profile = new_name.strip()
                 st.success("OK!")
                 st.rerun()
             else:
@@ -303,6 +316,7 @@ else:
             delete_profile_from_db(selected_profile)
         else:
             del st.session_state.guest_profiles[selected_profile]
+        st.session_state.sidebar_selected_profile = new_prof_label
         st.rerun()
 
 st.sidebar.markdown("---")
@@ -347,6 +361,7 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
             st.session_state.guest_profiles["Demo Profile"] = {
                 "date": demo_d, "time": demo_t, "city": demo_city, "positions": demo_pos
             }
+            st.session_state.sidebar_selected_profile = "Demo Profile"
             st.rerun()
 
     st.markdown("---")
@@ -380,6 +395,13 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
         """, unsafe_allow_html=True)
 
     st.stop()
+
+prof_data = saved_profiles.get(selected_profile, {})
+
+def extract_deg(val):
+    if isinstance(val, dict):
+        return val.get("deg", 0.0)
+    return float(val)
 
 # --- TAB 1: NATAL CHART ---
 if menu_choice.startswith("1."):
