@@ -23,14 +23,17 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
 
     lat = GREEK_AND_WORLD_CITIES.get(city_name, {}).get("lat", 37.9838)
     lon = GREEK_AND_WORLD_CITIES.get(city_name, {}).get("lon", 23.7275)
+    tz_name = GREEK_AND_WORLD_CITIES.get(city_name, {}).get("tz", "Europe/Athens")
 
     hour_decimal = b_time.hour + (b_time.minute / 60.0)
-    houses = calculate_houses(b_date.year, b_date.month, b_date.day, hour_decimal, lat, lon)
+    houses = calculate_houses(
+        b_date.year, b_date.month, b_date.day, hour_decimal, lat, lon, tz_name=tz_name
+    )
 
     positions_signs = {planet: get_sign_from_degrees(deg)[0] for planet, deg in natal_pos.items()}
     elements_pct, modalities_pct = calculate_elements_and_modalities(positions_signs)
     aspects = calculate_natal_aspects(natal_pos)
-    cz_data = get_chinese_zodiac(b_date.year)
+    cz_data = get_chinese_zodiac(b_date.year, b_date.month, b_date.day)
 
     ai_report_markdown = analyze_natal_chart_ai(
         profile_name,
@@ -75,13 +78,14 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
     rows_html = ""
     for planet, deg in natal_pos.items():
         sign_en, deg_in = get_sign_from_degrees(deg)
+        raw_deg = deg.get("deg", deg) if isinstance(deg, dict) else deg
         sign_display = ZODIAC_SIGNS.get(sign_en, {}).get(lang, sign_en)
         planet_display = PLANET_TRANSLATIONS.get(planet, {}).get(lang, planet)
         rows_html += f"""
         <tr>
             <td><strong>{planet_display}</strong></td>
             <td>{deg_in:.1f}° {sign_display}</td>
-            <td>{deg:.2f}°</td>
+            <td>{float(raw_deg):.2f}°</td>
         </tr>
         """
 
