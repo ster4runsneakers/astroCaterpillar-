@@ -1,4 +1,4 @@
-# ai_engine.py - New Google GenAI SDK Engine (Zero 503 Lag)
+# ai_engine.py - Fixed GenAI SDK Engine
 import os
 import time
 import streamlit as st
@@ -31,8 +31,8 @@ def _run_genai_call(prompt: str, user_api_key: str = ""):
         temperature=0.7
     )
 
-    # Μοντέλα επιβεβαιωμένα ενεργά στο Free Tier
-    models_to_try = ['gemini-2.5-flash', 'gemini-1.5-flash']
+    # Ενεργά και υποστηριζόμενα μοντέλα στο νέο SDK
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
     last_err = ""
 
     for m_name in models_to_try:
