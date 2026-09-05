@@ -13,7 +13,7 @@ from elements_engine import calculate_elements_and_modalities
 from natal_aspects_engine import calculate_natal_aspects
 from synastry_engine import calculate_synastry_aspects, calculate_monthly_transits
 from chinese_astrology import get_chinese_zodiac
-from chart_plotter import plot_natal_chart, plot_biwheel_chart, create_interactive_natal_plotly
+from chart_plotter import plot_natal_chart, plot_biwheel_chart, create_interactive_natal_plotly, create_interactive_synastry_plotly
 
 from ai_engine import (
     analyze_natal_chart_ai,
@@ -486,6 +486,7 @@ elif menu_choice.startswith("2."):
                 st.rerun()
 
 # --- TAB 3: SYNASTRY ---
+# --- TAB 3: SYNASTRY ---
 elif menu_choice.startswith("3."):
     st.header("💞 Συναστρία / Synastry")
     
@@ -501,14 +502,9 @@ elif menu_choice.startswith("3."):
                 pos2 = {p: extract_deg(v) for p, v in saved_profiles[p2]["positions"].items()}
                 syn_aspects = calculate_synastry_aspects(pos1, pos2)
                 
-                # Δημιουργία 3 στηλών για να κεντράρουμε και να περιορίσουμε το γράφημα
-                col_left, col_chart, col_right = st.columns([1, 2, 1])
-
-                with col_chart:
-                    fig, ax = plt.subplots(figsize=(4, 4), facecolor='#0E1117', subplot_kw={'projection': 'polar'})
-                    plot_biwheel_chart(ax, pos1, pos2)
-                    fig.tight_layout()
-                    st.pyplot(fig, use_container_width=False)
+                # Διαδραστικό Plotly Χάρτης Συναστρίας (Hover/Touch)
+                syn_fig = create_interactive_synastry_plotly(pos1, pos2, name1=p1, name2=p2, lang=lang)
+                st.plotly_chart(syn_fig, use_container_width=True)
                 
                 with st.spinner("Ανάλυση... / Analyzing..."):
                     report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang)
