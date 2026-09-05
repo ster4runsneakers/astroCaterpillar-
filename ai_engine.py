@@ -1,7 +1,7 @@
-# ai_engine.py - Direct REST API (Zero SDK Compatibility Issues)
+# ai_engine.py - Direct REST API (Fixed Case-Sensitive Import)
 import os
 import requests
-import Streamlit as st
+import streamlit as st
 
 SYSTEM_PROMPT = (
     "Είσαι ένας έμπειρος, ζεστός, επικοινωνιακός και βαθιά αφηγηματικός αστρολόγος, στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα. "
@@ -20,7 +20,6 @@ def _run_direct_rest_call(prompt: str, user_api_key: str = ""):
     if not api_key:
         return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
 
-    # Δοκιμή σταθερών μοντέλων v1beta / v1
     models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash"]
     last_err = ""
 
@@ -63,7 +62,6 @@ def _run_direct_rest_call(prompt: str, user_api_key: str = ""):
     return f"⚠️ Στιγμιαία καθυστέρηση απόκρισης. Παρακαλώ πατήστε ξανά το κουμπί σε 2-3 δευτερόλεπτα.\n*(Log: {last_err})*"
 
 def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
-    # Fallback generator για συμβατότητα με το st.write_stream
     res = analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang, user_api_key)
     yield res
 
