@@ -1,8 +1,9 @@
-# ai_engine.py - Complete Protected & Cached Engine
+# ai_engine.py - New Google GenAI SDK Engine (Zero 503 Lag)
 import os
 import time
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 SYSTEM_PROMPT = (
     "Είσαι ένας έμπειρος, ζεστός, επικοινωνιακός και βαθιά αφηγηματικός αστρολόγος, στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα. "
@@ -12,45 +13,51 @@ SYSTEM_PROMPT = (
     "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα."
 )
 
-def _configure_gemini(user_api_key=""):
+def _get_client(user_api_key=""):
     clean_user_key = user_api_key.strip() if user_api_key else ""
     key = clean_user_key if (clean_user_key and not clean_user_key.startswith("sk-")) else st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", "")).strip()
     if key:
-        genai.configure(api_key=key)
-        return True
-    return False
+        return genai.Client(api_key=key)
+    return None
 
-def _run_cached_gemini_call(prompt: str, user_api_key: str = ""):
-    if not _configure_gemini(user_api_key):
-        return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY."
+def _run_genai_call(prompt: str, user_api_key: str = ""):
+    client = _get_client(user_api_key)
+    if not client:
+        return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
 
-    generation_config = genai.GenerationConfig(
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM_PROMPT,
         max_output_tokens=2048,
         temperature=0.7
     )
 
-    free_models = ['gemini-2.5-flash', 'gemini-1.5-flash']
-    
-    for model_name in free_models:
-        try:
-            model = genai.GenerativeModel(model_name, generation_config=generation_config)
-            response = model.generate_content(prompt)
-            if response and response.text:
-                return response.text
-        except Exception as e:
-            if "503" in str(e):
-                time.sleep(1.0)
-                continue
-            continue
+    # Μοντέλα επιβεβαιωμένα ενεργά στο Free Tier
+    models_to_try = ['gemini-2.5-flash', 'gemini-1.5-flash']
+    last_err = ""
 
-    return "⚠️ Στιγμιαίος φόρτος στις υποδομές AI. Παρακαλώ δοκιμάστε ξανά σε λίγα δευτερόλεπτα."
+    for m_name in models_to_try:
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model=m_name,
+                    contents=prompt,
+                    config=config
+                )
+                if response and response.text:
+                    return response.text
+            except Exception as e:
+                last_err = str(e)
+                if "503" in last_err or "429" in last_err:
+                    time.sleep(1.0)
+                    continue
+                break
+
+    return f"⚠️ Στιγμιαία καθυστέρηση απόκρισης. Παρακαλώ πατήστε ξανά το κουμπί σε 2-3 δευτερόλεπτα.\n*(Log: {last_err})*"
 
 # --- NATAL CHART CACHING ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
-    {SYSTEM_PROMPT}
-
     Κάνε μια αναλυτική, ζεστή, γλαφυρή και βαθιά αστρολογική ανάλυση για το γενέθλιο προφίλ '{profile_name}', στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα.
 
     ΔΕΔΟΜΕΝΑ ΧΑΡΤΗ:
@@ -69,37 +76,33 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
        - **Πορεία Πεπρωμένου, Καριέρα & Ευκαιρίες**
     4. Γράψε σε άπταιστα Ελληνικά.
     """
-    return _run_cached_gemini_call(prompt, user_api_key)
+    return _run_genai_call(prompt, user_api_key)
 
 # --- TRANSITS CACHING ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
     prompt = f"""
-    {SYSTEM_PROMPT}
-
     Κάνε μια αναλυτική πρόβλεψη διελεύσεων για το προφίλ '{profile_name}' για τη χρονική περίοδο '{timeframe}'.
     Δεδομένα Διελεύσεων: {transits_data}
 
     Σύνθεσε τις επιδράσεις των πλανητών με γλαφυρό τρόπο, χρησιμοποιώντας αλληγορίες και εστιάζοντας σε ευκαιρίες, προκλήσεις και ψυχολογική εξέλιξη.
     """
-    return _run_cached_gemini_call(prompt, user_api_key)
+    return _run_genai_call(prompt, user_api_key)
 
 # --- SYNASTRY CACHING ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el", user_api_key=""):
     prompt = f"""
-    {SYSTEM_PROMPT}
-
     Κάνε μια αναλυτική ανάλυση συναστρίας και χημικής αλληλεπίδρασης ανάμεσα στα άτομα '{p1}' και '{p2}'.
     Όψεις Συναστρίας: {synastry_aspects}
 
     Ανάλυσε τη συναισθηματική σύνδεση, τα σημεία τριβής και τη μυθολογική αλληγορία της σχέσης τους.
     """
-    return _run_cached_gemini_call(prompt, user_api_key)
+    return _run_genai_call(prompt, user_api_key)
 
 def ask_caterpillar_chat(context_text, user_prompt, lang="el", user_api_key=""):
-    prompt = f"{SYSTEM_PROMPT}\n\nΠλαίσιο:\n{context_text}\n\nΕρώτηση Χρήστη: {user_prompt}"
-    return _run_cached_gemini_call(prompt, user_api_key)
+    prompt = f"Πλαίσιο Αρχικής Ανάλυσης:\n{context_text}\n\nΕρώτηση Χρήστη: {user_prompt}"
+    return _run_genai_call(prompt, user_api_key)
 
 def clear_ai_cache():
     st.cache_data.clear()
