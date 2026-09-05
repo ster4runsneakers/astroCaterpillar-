@@ -326,9 +326,19 @@ if menu_choice.startswith("1."):
     
     lat = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("lat", 37.9838)
     lon = GREEK_AND_WORLD_CITIES.get(city_key, {}).get("lon", 23.7275)
-    hour_decimal = b_time.hour + (b_time.minute / 60.0)
     
-    houses = calculate_houses(b_date.year, b_date.month, b_date.day, hour_decimal, lat, lon)
+    # Μετατροπή Τοπικής Ώρας σε UTC για ακριβή υπολογισμό Ωροσκόπου
+    # Για την Ελλάδα (EET/EEST): UTC+2 τον χειμώνα, UTC+3 το καλοκαίρι
+    # Υπολογισμός UTC hour_decimal:
+    tz_offset = 2.0  # Προεπιλογή χειμερινής ώρας
+    # Αν η ημερομηνία είναι εντός θερινής ώρας (Απρίλιος - Οκτώβριος)
+    if 3 < b_date.month < 11:
+        tz_offset = 3.0
+        
+    local_hour_decimal = b_time.hour + (b_time.minute / 60.0)
+    utc_hour_decimal = (local_hour_decimal - tz_offset) % 24.0
+    
+    houses = calculate_houses(b_date.year, b_date.month, b_date.day, utc_hour_decimal, lat, lon)
     positions_signs = {p: get_sign_from_degrees(deg)[0] for p, deg in natal_pos.items()}
     elements_pct, modalities_pct = calculate_elements_and_modalities(positions_signs)
     aspects = calculate_natal_aspects(natal_pos)
