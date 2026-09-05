@@ -1,4 +1,4 @@
-# ai_engine.py - Updated to Gemini 3.6 Flash
+# ai_engine.py - Dynamic Model Discovery Engine
 import os
 import time
 import streamlit as st
@@ -19,6 +19,22 @@ def _get_client(user_api_key=""):
     if key:
         return genai.Client(api_key=key)
     return None
+
+def _get_available_models(client):
+    """Ανιχνεύει δυναμικά τα διαθέσιμα Flash/Text μοντέλα του λογαριασμού."""
+    try:
+        discovered = []
+        for m in client.models.list():
+            m_id = getattr(m, 'name', '') or getattr(m, 'model', '')
+            clean_id = m_id.replace('models/', '')
+            if 'flash' in clean_id and 'image' not in clean_id and 'audio' not in clean_id:
+                discovered.append(clean_id)
+        if discovered:
+            return discovered
+    except Exception:
+        pass
+    # Fallback λίστα αν αποτύχει το listing
+    return ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
 
 def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     client = _get_client(user_api_key)
@@ -52,7 +68,9 @@ def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, 
     4. Γράψε σε άπταιστα Ελληνικά.
     """
 
-    for m_name in ['gemini-3.6-flash', 'gemini-2.5-flash']:
+    models_to_try = _get_available_models(client)
+
+    for m_name in models_to_try:
         try:
             response = client.models.generate_content_stream(
                 model=m_name,
@@ -79,8 +97,10 @@ def _run_genai_call(prompt: str, user_api_key: str = ""):
         temperature=0.7
     )
 
+    models_to_try = _get_available_models(client)
     last_err = ""
-    for m_name in ['gemini-3.6-flash', 'gemini-2.5-flash']:
+
+    for m_name in models_to_try:
         try:
             response = client.models.generate_content(
                 model=m_name,
