@@ -414,23 +414,31 @@ if menu_choice.startswith("1."):
     
     btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
     if st.button(btn_ai):
-        with st.spinner("Ο AstroCaterpillar αναλύει τα δεδομένα... / Analyzing..."):
-            report = analyze_natal_chart_ai(
-                selected_profile,
-                str(raw_natal_pos),
-                str(houses),
-                str(cz_data),
-                f"Elements: {elements_pct}, Modalities: {modalities_pct}",
-                str(aspects),
-                lang=lang
-            )
-            st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
+        # Χρήση st.write_stream για ζωντανή παραγωγή κειμένου
+        from ai_engine import analyze_natal_chart_ai_stream
+        
+        stream_generator = analyze_natal_chart_ai_stream(
+            selected_profile,
+            str(raw_natal_pos),
+            str(houses),
+            str(cz_data),
+            f"Elements: {elements_pct}, Modalities: {modalities_pct}",
+            str(aspects),
+            lang=lang
+        )
+        
+        # Το st.write_stream εμφανίζει το κείμενο ζωντανά και επιστρέφει το πλήρες string στο τέλος
+        report = st.write_stream(stream_generator)
+        st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
 
     cache_key = f"natal_ai_{selected_profile}_{lang}"
     if cache_key in st.session_state:
         report_text = st.session_state[cache_key]
-        st.markdown(report_text)
         
+        # Αν η ανάλυση έχει ήδη παραχθεί προηγουμένως και βρίσκεται στο cache, την εμφανίζουμε
+        if not st.session_state.get(f"just_generated_{selected_profile}"):
+            st.markdown(report_text)
+            
         st.download_button(
             label="📥 Download AI Report (.txt)",
             data=report_text,
@@ -450,7 +458,6 @@ if menu_choice.startswith("1."):
         if user_q:
             st.session_state.chat_history["natal"].append({"role": "user", "content": user_q})
             with st.spinner("Σκέφτεται... / Thinking..."):
-                # Pass whole conversation context
                 history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history["natal"]])
                 full_prompt = f"Αρχική Ανάλυση:\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
                 ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
