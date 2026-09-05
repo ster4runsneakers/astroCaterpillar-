@@ -70,6 +70,22 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
                         continue
                     break
 
+    xai_key = (st.secrets.get("XAI_API_KEY", "") or os.getenv("XAI_API_KEY", "")).strip()
+    if xai_key:
+        try:
+            xai = OpenAI(api_key=xai_key, base_url="https://api.x.ai/v1", timeout=45.0)
+            response = xai.chat.completions.create(
+                model="grok-4",
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+            )
+            if response and response.choices and response.choices[0].message.content:
+                return response.choices[0].message.content
+        except Exception as e:
+            last_errors.append(f"grok-4: {str(e)}")
+
     or_client = _get_openrouter_client(user_api_key)
     if or_client:
         for model_name in OPENROUTER_MODELS:
