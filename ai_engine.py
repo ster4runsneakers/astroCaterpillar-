@@ -1,4 +1,4 @@
-# ai_engine.py - Dynamic Model Discovery Engine
+# ai_engine.py - Bulletproof Multi-Model Fallback Engine
 import os
 import time
 import streamlit as st
@@ -13,6 +13,13 @@ SYSTEM_PROMPT = (
     "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα."
 )
 
+# Ιεραρχία μοντέλων: Αν αποτύχει το πρώτο, δοκιμάζει αυτόματα τα επόμενα
+CONFIRMED_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash'
+]
+
 def _get_client(user_api_key=""):
     clean_user_key = user_api_key.strip() if user_api_key else ""
     key = clean_user_key if (clean_user_key and not clean_user_key.startswith("sk-")) else st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", "")).strip()
@@ -20,26 +27,10 @@ def _get_client(user_api_key=""):
         return genai.Client(api_key=key)
     return None
 
-def _get_available_models(client):
-    """Ανιχνεύει δυναμικά τα διαθέσιμα Flash/Text μοντέλα του λογαριασμού."""
-    try:
-        discovered = []
-        for m in client.models.list():
-            m_id = getattr(m, 'name', '') or getattr(m, 'model', '')
-            clean_id = m_id.replace('models/', '')
-            if 'flash' in clean_id and 'image' not in clean_id and 'audio' not in clean_id:
-                discovered.append(clean_id)
-        if discovered:
-            return discovered
-    except Exception:
-        pass
-    # Fallback λίστα αν αποτύχει το listing
-    return ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
-
 def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     client = _get_client(user_api_key)
     if not client:
-        yield "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY."
+        yield "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
         return
 
     config = types.GenerateContentConfig(
@@ -68,9 +59,7 @@ def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, 
     4. Γράψε σε άπταιστα Ελληνικά.
     """
 
-    models_to_try = _get_available_models(client)
-
-    for m_name in models_to_try:
+    for m_name in CONFIRMED_MODELS:
         try:
             response = client.models.generate_content_stream(
                 model=m_name,
@@ -84,12 +73,12 @@ def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, 
         except Exception:
             continue
 
-    yield "⚠️ Στιγμιαία καθυστέρηση απόκρισης. Παρακαλώ δοκιμάστε ξανά."
+    yield "⚠️ Στιγμιαία καθυστέρηση απόκρισης από τις υποδομές AI. Παρακαλώ δοκιμάστε ξανά σε λίγα δευτερόλεπτα."
 
 def _run_genai_call(prompt: str, user_api_key: str = ""):
     client = _get_client(user_api_key)
     if not client:
-        return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY."
+        return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
 
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
@@ -97,10 +86,8 @@ def _run_genai_call(prompt: str, user_api_key: str = ""):
         temperature=0.7
     )
 
-    models_to_try = _get_available_models(client)
     last_err = ""
-
-    for m_name in models_to_try:
+    for m_name in CONFIRMED_MODELS:
         try:
             response = client.models.generate_content(
                 model=m_name,
