@@ -1,5 +1,6 @@
-# ai_engine.py - Clean Gemini Direct Engine (No Deadlocks)
+# ai_engine.py - Optimized Free Tier & Fast Retry Engine
 import os
+import time
 import streamlit as st
 from google import genai
 
@@ -27,30 +28,35 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
     if not gem_client:
         return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets του Streamlit."
 
-    # Ενεργά μοντέλα βάσει των τελευταίων οδηγιών της Google
-    active_models = [
-        'gemini-3.1-pro-preview',
-        'gemini-3.6-flash',
-        'gemini-2.5-flash'
+    # Μόνο σταθερά μοντέλα διαθέσιμα στο Free Tier
+    free_models = [
+        'gemini-2.5-flash',
+        'gemini-1.5-flash'
     ]
     
     full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
     last_errors = []
 
-    for g_model in active_models:
-        try:
-            resp = gem_client.models.generate_content(
-                model=g_model,
-                contents=full_prompt
-            )
-            if resp and resp.text:
-                return resp.text
-        except Exception as e:
-            last_errors.append(f"{g_model}: {str(e)}")
-            continue
+    for g_model in free_models:
+        # Δοκιμή 2 φορές με ελάχιστη αναμονή (1s) μόνο για στιγμιαία 503
+        for attempt in range(2):
+            try:
+                resp = gem_client.models.generate_content(
+                    model=g_model,
+                    contents=full_prompt
+                )
+                if resp and resp.text:
+                    return resp.text
+            except Exception as e:
+                err_str = str(e)
+                last_errors.append(f"{g_model}: {err_str}")
+                if "503" in err_str and attempt == 0:
+                    time.sleep(1.0)
+                    continue
+                break
 
     err_msg = " | ".join(last_errors) if last_errors else "Άγνωστο σφάλμα."
-    return f"⚠️ Στιγμιαίος φόρτος στις υποδομές της Google. Παρακαλώ πατήστε ξανά το κουμπί σε λίγα δευτερόλεπτα.\n*(Log: {err_msg})*"
+    return f"⚠️ Στιγμιαίος φόρτος στις υποδομές AI. Παρακαλώ δοκιμάστε ξανά σε λίγα δευτερόλεπτα.\n*(Log: {err_msg})*"
 
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
