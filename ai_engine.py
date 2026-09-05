@@ -1,7 +1,7 @@
-# ai_engine.py - Direct & Fast Execution
+# ai_engine.py - Clean Gemini Direct Engine (No Deadlocks)
 import os
 import streamlit as st
-from openai import OpenAI
+from google import genai
 
 SYSTEM_PROMPT = (
     "Είσαι ένας έμπειρος, ζεστός, επικοινωνιακός και βαθιά αφηγηματικός αστρολόγος, στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα. "
@@ -11,46 +11,46 @@ SYSTEM_PROMPT = (
     "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα."
 )
 
-def _get_openrouter_client(user_api_key=""):
+def _get_gemini_client(user_api_key=""):
     clean_user_key = user_api_key.strip() if user_api_key else ""
-    if clean_user_key and clean_user_key.startswith("sk-or-"):
-        return OpenAI(api_key=clean_user_key, base_url="https://openrouter.ai/api/v1", timeout=12.0)
+    if clean_user_key and not clean_user_key.startswith("sk-"):
+        return genai.Client(api_key=clean_user_key)
     
-    master_key = (st.secrets.get("OPENROUTER_API_KEY", "") or os.getenv("OPENROUTER_API_KEY", "")).strip()
+    master_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", "")).strip()
     if master_key:
-        return OpenAI(api_key=master_key, base_url="https://openrouter.ai/api/v1", timeout=12.0)
+        return genai.Client(api_key=master_key)
     return None
 
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
-    # Χρήση OpenRouter με επιβεβαιωμένα ενεργά μοντέλα για να αποφευχθούν τα deadlocks του Gemini SDK
-    or_client = _get_openrouter_client(user_api_key)
+    gem_client = _get_gemini_client(user_api_key)
     
-    if or_client:
-        # Δοκιμάζουμε απευθείας τα πιο γρήγορα και σταθερά μοντέλα
-        working_models = [
-            "google/gemini-2.0-flash-001",
-            "meta-llama/llama-3.3-70b-instruct",
-            "deepseek/deepseek-chat",
-            "openrouter/auto"
-        ]
-        
-        for model_name in working_models:
-            try:
-                response = or_client.chat.completions.create(
-                    model=model_name,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt}
-                    ],
-                    extra_headers={"HTTP-Referer": "https://astrocaterpillar.streamlit.app"},
-                    timeout=10.0
-                )
-                if response and response.choices and response.choices[0].message.content:
-                    return response.choices[0].message.content
-            except Exception:
-                continue
+    if not gem_client:
+        return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets του Streamlit."
 
-    return "⚠️ Η μηχανή AI είναι προσωρινά απασχολημένη. Παρακαλώ κάντε ξανά κλικ στο κουμπί υπολογισμού."
+    # Ενεργά μοντέλα βάσει των τελευταίων οδηγιών της Google
+    active_models = [
+        'gemini-3.1-pro-preview',
+        'gemini-3.6-flash',
+        'gemini-2.5-flash'
+    ]
+    
+    full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
+    last_errors = []
+
+    for g_model in active_models:
+        try:
+            resp = gem_client.models.generate_content(
+                model=g_model,
+                contents=full_prompt
+            )
+            if resp and resp.text:
+                return resp.text
+        except Exception as e:
+            last_errors.append(f"{g_model}: {str(e)}")
+            continue
+
+    err_msg = " | ".join(last_errors) if last_errors else "Άγνωστο σφάλμα."
+    return f"⚠️ Στιγμιαίος φόρτος στις υποδομές της Google. Παρακαλώ πατήστε ξανά το κουμπί σε λίγα δευτερόλεπτα.\n*(Log: {err_msg})*"
 
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
