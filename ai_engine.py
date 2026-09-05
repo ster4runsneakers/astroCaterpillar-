@@ -1,4 +1,4 @@
-# ai_engine.py - Complete GenAI Engine
+# ai_engine.py - Complete GenAI Engine (Fixed Models)
 import os
 import time
 import streamlit as st
