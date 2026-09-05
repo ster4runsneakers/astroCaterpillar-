@@ -1,8 +1,23 @@
-# ai_engine.py - Fast Engine (<5s Execution)
+# ai_engine.py
 import os
+import time
 import streamlit as st
 from google import genai
 from openai import OpenAI
+
+GEMINI_MODELS = [
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-2.5-flash",
+]
+
+OPENROUTER_MODELS = [
+    "minimax/minimax-m3:free",
+    "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-3.5-lightning:free",
+    "z-ai/glm-5.2:free",
+    "openrouter/free",
+]
 
 SYSTEM_PROMPT = (
     "Είσαι ένας έμπειρος, ζεστός, επικοινωνιακός και βαθιά αφηγηματικός αστρολόγος, στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα. "
@@ -15,11 +30,11 @@ SYSTEM_PROMPT = (
 def _get_openrouter_client(user_api_key=""):
     clean_user_key = user_api_key.strip() if user_api_key else ""
     if clean_user_key and clean_user_key.startswith("sk-or-"):
-        return OpenAI(api_key=clean_user_key, base_url="https://openrouter.ai/api/v1", timeout=8.0)
-    
+        return OpenAI(api_key=clean_user_key, base_url="https://openrouter.ai/api/v1", timeout=45.0)
+
     master_key = (st.secrets.get("OPENROUTER_API_KEY", "") or os.getenv("OPENROUTER_API_KEY", "")).strip()
     if master_key:
-        return OpenAI(api_key=master_key, base_url="https://openrouter.ai/api/v1", timeout=8.0)
+        return OpenAI(api_key=master_key, base_url="https://openrouter.ai/api/v1", timeout=45.0)
     return None
 
 def _get_gemini_client(user_api_key=""):
@@ -35,42 +50,38 @@ def _get_gemini_client(user_api_key=""):
 def _generate_unified_response(prompt: str, user_api_key: str = ""):
     last_errors = []
 
-    # 1. Gemini Fast Direct Check (1 προσπάθεια ανά μοντέλο, χωρίς sleep)
     gem_client = _get_gemini_client(user_api_key)
     if gem_client:
-        active_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
         full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
-        
-        for g_model in active_models:
-            try:
-                resp = gem_client.models.generate_content(
-                    model=g_model,
-                    contents=full_prompt
-                )
-                if resp and resp.text:
-                    return resp.text
-            except Exception as e:
-                last_errors.append(f"{g_model}: {str(e)}")
-                continue
+        for g_model in GEMINI_MODELS:
+            for attempt in range(2):
+                try:
+                    resp = gem_client.models.generate_content(
+                        model=g_model,
+                        contents=full_prompt,
+                    )
+                    if resp and getattr(resp, "text", None):
+                        return resp.text
+                except Exception as e:
+                    err = str(e)
+                    last_errors.append(f"{g_model}: {err}")
+                    if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                        time.sleep(4)
+                        continue
+                    break
 
-    # 2. OpenRouter Fast Fallback (Timeout 8s)
     or_client = _get_openrouter_client(user_api_key)
     if or_client:
-        fast_or_models = [
-            "google/gemma-2-9b-it:free",
-            "qwen/qwen-2.5-coder-32b-instruct:free"
-        ]
-        
-        for model_name in fast_or_models:
+        for model_name in OPENROUTER_MODELS:
             try:
                 response = or_client.chat.completions.create(
                     model=model_name,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
                     extra_headers={"HTTP-Referer": "https://astrocaterpillar.streamlit.app"},
-                    timeout=8.0
+                    timeout=45.0,
                 )
                 if response and response.choices and response.choices[0].message.content:
                     return response.choices[0].message.content
@@ -121,4 +132,3 @@ def ask_caterpillar_chat(context_text, user_prompt, lang="el", user_api_key=""):
 
 def clear_ai_cache():
     pass
-
