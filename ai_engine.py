@@ -1,8 +1,8 @@
-# ai_engine.py - Stream-Enabled Engine
+# ai_engine.py - Real-Time Streaming Engine
 import os
 import time
 import streamlit as st
-from google import genai
+import google.generativeai as genai
 
 SYSTEM_PROMPT = (
     "Είσαι ένας έμπειρος, ζεστός, επικοινωνιακός και βαθιά αφηγηματικός αστρολόγος, στο ύφος της Ισμήνης Καράλη και της Λίτσας Πατέρα. "
@@ -12,24 +12,20 @@ SYSTEM_PROMPT = (
     "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα."
 )
 
-def _get_gemini_client(user_api_key=""):
+def _configure_gemini(user_api_key=""):
     clean_user_key = user_api_key.strip() if user_api_key else ""
-    if clean_user_key and not clean_user_key.startswith("sk-"):
-        return genai.Client(api_key=clean_user_key)
-    
-    master_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", "")).strip()
-    if master_key:
-        return genai.Client(api_key=master_key)
-    return None
+    key = clean_user_key if (clean_user_key and not clean_user_key.startswith("sk-")) else st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", "")).strip()
+    if key:
+        genai.configure(api_key=key)
+        return True
+    return False
 
 def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     """
-    Generator function που επιστρέφει το κείμενο κομμάτι-κομμάτι (streaming) 
-    για να εμφανίζεται ακαριαία στο Streamlit UI.
+    Generator που στέλνει ακαριαία τα chunks στο Streamlit st.write_stream
     """
-    gem_client = _get_gemini_client(user_api_key)
-    if not gem_client:
-        yield "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
+    if not _configure_gemini(user_api_key):
+        yield "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY."
         return
 
     prompt = f"""
@@ -54,29 +50,29 @@ def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, 
     4. Γράψε σε άπταιστα Ελληνικά.
     """
 
-    free_models = ['gemini-2.5-flash', 'gemini-1.5-flash']
+    # Δοκιμή σταθερών μοντέλων Flash
+    active_models = ['gemini-2.5-flash', 'gemini-1.5-flash']
     
-    for g_model in free_models:
-        for attempt in range(2):
-            try:
-                response = gem_client.models.generate_content_stream(
-                    model=g_model,
-                    contents=prompt
-                )
-                for chunk in response:
-                    if chunk.text:
-                        yield chunk.text
-                return  # Επιτυχής ολοκλήρωση
-            except Exception as e:
-                if "503" in str(e) and attempt == 0:
-                    time.sleep(1.0)
-                    continue
-                break
-                
-    yield "⚠️ Στιγμιαίος φόρτος στις υποδομές AI. Παρακαλώ δοκιμάστε ξανά."
+    for model_name in active_models:
+        try:
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt, stream=True)
+            
+            for chunk in response:
+                if hasattr(chunk, 'text') and chunk.text:
+                    yield chunk.text
+            return  # Ολοκληρώθηκε με επιτυχία
+            
+        except Exception as e:
+            err_str = str(e)
+            if "503" in err_str:
+                time.sleep(1.0)
+                continue
+            continue
+
+    yield "⚠️ Προσωρινός φόρτος στις υποδομές της Google. Παρακαλώ ξαναδοκιμάστε σε λίγα δευτερόλεπτα."
 
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
-    # Fallback μη-streaming κλήσης
     full_text = ""
     for chunk in analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang, user_api_key):
         full_text += chunk
