@@ -68,14 +68,31 @@ def calculate_natal_positions(year: int, month: int, day: int, hour_decimal: flo
         }
     return positions
 
-def calculate_houses(year: int, month: int, day: int, hour_decimal: float, lat: float, lon: float) -> dict:
-    jd = julian_day(year, month, day, hour_decimal)
-    T = (jd - 2451545.0) / 36525.0
-    GMST = (280.46061837 + 360.98564736629 * (jd - 2451545.0)) % 360.0
-    LST = (GMST + lon) % 360.0
+import swisseph as swe
+
+def calculate_houses(year, month, day, utc_hour, lat, lon):
+    """
+    Υπολογισμός Οίκων & Ωροσκόπου με το Swiss Ephemeris.
+    - year, month, day: Ημερομηνία γέννησης
+    - utc_hour: Ώρα σε UTC (float)
+    - lat: Γεωγραφικό Πλάτος (π.χ. 37.9838 για Αθήνα)
+    - lon: Γεωγραφικό Μήκος (π.χ. 23.7275 για Αθήνα)
+    """
+    # 1. Υπολογισμός Julian Day σε Universal Time
+    jul_day = swe.julday(year, month, day, utc_hour)
     
-    houses = {}
-    for i in range(1, 13):
-        h_deg = (LST + (i - 1) * 30.0) % 360.0
-        houses[f"House_{i}"] = round(h_deg, 2)
-    return houses
+    # 2. Υπολογισμός Οίκων (Placidus system = 'P')
+    # ΠΡΟΣΟΧΗ: Η σειρά είναι (jul_day, lat, lon, house_system)
+    houses_cusps, ascmc = swe.houses(jul_day, lat, lon, b'P')
+    
+    # ascmc[0] = Ascendant (Ωροσκόπος)
+    asc_deg = ascmc[0]
+    
+    houses_dict = {}
+    for i in range(12):
+        houses_dict[f"House_{i+1}"] = houses_cusps[i]
+        
+    # Ο 1ος Οίκος ταυτίζεται με τον Ωροσκόπο
+    houses_dict["House_1"] = asc_deg
+    
+    return houses_dict
