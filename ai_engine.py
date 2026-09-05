@@ -1,4 +1,4 @@
-# ai_engine.py - Complete GenAI Engine (Fixed Models)
+# ai_engine.py - Bulletproof Model Selection
 import os
 import time
 import streamlit as st
@@ -23,7 +23,7 @@ def _get_client(user_api_key=""):
 def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     client = _get_client(user_api_key)
     if not client:
-        yield "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
+        yield "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY."
         return
 
     config = types.GenerateContentConfig(
@@ -52,9 +52,8 @@ def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, 
     4. Γράψε σε άπταιστα Ελληνικά.
     """
 
-    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
-
-    for m_name in models_to_try:
+    # Δοκιμή αποκλειστικά των νέων Flash μοντέλων
+    for m_name in ['gemini-2.5-flash', 'gemini-2.0-flash']:
         try:
             response = client.models.generate_content_stream(
                 model=m_name,
@@ -68,12 +67,12 @@ def analyze_natal_chart_ai_stream(profile_name, raw_positions, houses, cz_data, 
         except Exception:
             continue
 
-    yield "⚠️ Στιγμιαία καθυστέρηση απόκρισης από τις υποδομές AI. Παρακαλώ δοκιμάστε ξανά."
+    yield "⚠️ Στιγμιαία καθυστέρηση απόκρισης. Παρακαλώ δοκιμάστε ξανά."
 
 def _run_genai_call(prompt: str, user_api_key: str = ""):
     client = _get_client(user_api_key)
     if not client:
-        return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY στα Secrets."
+        return "⚠️ Δεν βρέθηκε έγκυρο GEMINI_API_KEY."
 
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
@@ -81,29 +80,22 @@ def _run_genai_call(prompt: str, user_api_key: str = ""):
         temperature=0.7
     )
 
-    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
     last_err = ""
+    for m_name in ['gemini-2.5-flash', 'gemini-2.0-flash']:
+        try:
+            response = client.models.generate_content(
+                model=m_name,
+                contents=prompt,
+                config=config
+            )
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            last_err = str(e)
+            continue
 
-    for m_name in models_to_try:
-        for attempt in range(2):
-            try:
-                response = client.models.generate_content(
-                    model=m_name,
-                    contents=prompt,
-                    config=config
-                )
-                if response and response.text:
-                    return response.text
-            except Exception as e:
-                last_err = str(e)
-                if "503" in last_err or "429" in last_err:
-                    time.sleep(1.0)
-                    continue
-                break
+    return f"⚠️ Στιγμιαία καθυστέρηση απόκρισης. Παρακαλώ πατήστε ξανά το κουμπί.\n*(Log: {last_err})*"
 
-    return f"⚠️ Στιγμιαία καθυστέρηση απόκρισης. Παρακαλώ πατήστε ξανά το κουμπί σε 2-3 δευτερόλεπτα.\n*(Log: {last_err})*"
-
-# --- CACHED FUNCTIONS ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicators, aspects, lang="el", user_api_key=""):
     prompt = f"""
@@ -129,26 +121,16 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
-    prompt = f"""
-    Κάνε μια αναλυτική πρόβλεψη διελεύσεων για το προφίλ '{profile_name}' για τη χρονική περίοδο '{timeframe}'.
-    Δεδομένα Διελεύσεων: {transits_data}
-
-    Σύνθεσε τις επιδράσεις των πλανητών με γλαφυρό τρόπο, χρησιμοποιώντας αλληγορίες και εστιάζοντας σε ευκαιρίες, προκλήσεις και ψυχολογική εξέλιξη.
-    """
+    prompt = f"Πρόβλεψη διελεύσεων για '{profile_name}' ({timeframe}): {transits_data}"
     return _run_genai_call(prompt, user_api_key)
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el", user_api_key=""):
-    prompt = f"""
-    Κάνε μια αναλυτική ανάλυση συναστρίας και χημικής αλληλεπίδρασης ανάμεσα στα άτομα '{p1}' και '{p2}'.
-    Όψεις Συναστρίας: {synastry_aspects}
-
-    Ανάλυσε τη συναισθηματική σύνδεση, τα σημεία τριβής και τη μυθολογική αλληγορία της σχέσης τους.
-    """
+    prompt = f"Ανάλυση συναστρίας ανάμεσα σε '{p1}' και '{p2}': {synastry_aspects}"
     return _run_genai_call(prompt, user_api_key)
 
 def ask_caterpillar_chat(context_text, user_prompt, lang="el", user_api_key=""):
-    prompt = f"Πλαίσιο Αρχικής Ανάλυσης:\n{context_text}\n\nΕρώτηση Χρήστη: {user_prompt}"
+    prompt = f"Πλαίσιο:\n{context_text}\n\nΕρώτηση: {user_prompt}"
     return _run_genai_call(prompt, user_api_key)
 
 def clear_ai_cache():
