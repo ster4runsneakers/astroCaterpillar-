@@ -1,4 +1,4 @@
-# app.py - AstroCaterpillar Micro-App (Includes Persistent Multi-turn Chat, Rate Limiting & User API Keys)
+# app.py - AstroCaterpillar Micro-App (Includes Persistent Multi-turn Chat, Rate Limiting & Admin Bypass)
 import datetime
 import json
 import sqlite3
@@ -17,7 +17,6 @@ from chart_plotter import plot_natal_chart, plot_biwheel_chart, create_interacti
 
 from ai_engine import (
     analyze_natal_chart_ai,
-    analyze_natal_chart_ai_stream,
     analyze_synastry_ai,
     analyze_transits_ai,
     ask_caterpillar_chat,
@@ -98,7 +97,7 @@ ELEMENTS_GUIDE = {
 }
 
 MODALITIES_GUIDE = {
-    "⚡ Παρορμητικά / Cardinal": "Η Αρχή & η Πρωτοβουλία. Ανοίγουν νέους δρόμους, ξεκινούν έργα, θέτουν στόχοι.",
+    "⚡ Παρορμητικά / Cardinal": "Η Αρχή & η Πρωτοβουλία. Ανοίγουν νέους δρόμους, ξεκινούν έργα, θέτουν στόχους.",
     "🏛️ Σταθερά / Fixed": "Η Διατήρηση & η Θεμελίωση. Συγκεντρώνουν, σταθεροποιούν και προστατεύουν με αφοσίωση.",
     "🌀 Μεταβλητά / Mutable": "Η Προσαρμογή & η Μετάβαση. Προσαρμόζονται, βελτιώνουν, διορθώνουν και εξελίσσουν."
 }
@@ -235,16 +234,17 @@ user_gemini_key = st.sidebar.text_input(
     help="Εισάγετε το δικό σας δωρεάν key από το Google AI Studio για απεριόριστη χρήση."
 )
 
-if not user_gemini_key:
+if st.session_state.is_admin:
+    st.sidebar.success("🔑 Admin Mode Active (Απεριόριστες αναλύσεις)")
+elif user_gemini_key:
+    st.sidebar.success("🟢 Χρήση προσωπικού API Key (Απεριόριστες αναλύσεις)")
+else:
     rem_calls = max(0, MAX_FREE_ANALYSES - st.session_state.ai_usage_count)
     st.sidebar.caption(f"💡 Δωρεάν αναλύσεις συνεδρίας: **{rem_calls}/{MAX_FREE_ANALYSES}**")
-else:
-    st.sidebar.success("🟢 Χρήση προσωπικού API Key (Απεριόριστες αναλύσεις)")
 
 # --- PROFILE SOURCE CONTROLLER ---
 if st.session_state.is_admin:
     saved_profiles = load_profiles_from_db()
-    st.sidebar.success("🔑 Admin Mode Active")
 else:
     saved_profiles = st.session_state.guest_profiles
 
@@ -259,7 +259,6 @@ all_options = [new_prof_label] + profile_names
 if "sidebar_selected_profile" not in st.session_state:
     st.session_state.sidebar_selected_profile = new_prof_label
 
-# Υπολογισμός index για να συγχρονίζεται η επιλογή της sidebar με το state
 current_index = 0
 if st.session_state.sidebar_selected_profile in all_options:
     current_index = all_options.index(st.session_state.sidebar_selected_profile)
@@ -334,7 +333,6 @@ menu_choice = st.sidebar.radio("Πλοήγηση / Navigation:", menu_options)
 
 # --- MAIN CONTROLLER & WELCOME DASHBOARD ---
 if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or menu_choice.startswith("6.")):
-    # Hero Welcome Banner
     st.markdown("""
     <div style="background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); padding: 30px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 25px; text-align: center;">
         <h1 style="color: #F8FAFC; margin-bottom: 10px;">🐛 Καλώς ήρθατε στο AstroCaterpillar AI</h1>
@@ -344,10 +342,8 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
     </div>
     """, unsafe_allow_html=True)
 
-    # Call to Action Container
     st.info("👈 **Ξεκινήστε τώρα:** Συμπληρώστε τα στοιχεία γέννησής σας στη πλαϊνή μπάρα (Sidebar) και πατήστε **'💾 Υπολογισμός Χάρτη'**.")
 
-    # Quick Demo Option Button
     col_demo1, col_demo2 = st.columns([2, 1])
     with col_demo1:
         st.caption("⚡ Θέλετε να δείτε την εφαρμογή αμέσως σε δράση χωρίς εισαγωγή στοιχείων;")
@@ -367,7 +363,6 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
 
     st.markdown("---")
 
-    # Feature Cards Layout
     st.subheader("🔮 Τι μπορείτε να υπολογίσετε:")
     c1, c2, c3 = st.columns(3)
 
@@ -501,7 +496,7 @@ if menu_choice.startswith("1."):
 
     btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
     if st.button(btn_ai):
-        if st.session_state.ai_usage_count >= MAX_FREE_ANALYSES and not user_gemini_key:
+        if st.session_state.ai_usage_count >= MAX_FREE_ANALYSES and not user_gemini_key and not st.session_state.is_admin:
             st.error("⚠️ Φτάσατε το συνολικό όριο των 3 δωρεάν αναλύσεων. Παρακαλώ καταχωρίστε το δικό σας Gemini API Key στο Sidebar για να συνεχίσετε!")
         else:
             with st.spinner("🔮 Ο AstroCaterpillar αναλύει τον χάρτη σου... Παρακαλώ περίμενε..."):
@@ -531,7 +526,7 @@ if menu_choice.startswith("1."):
                     )
                     st.markdown(report)
 
-                if not user_gemini_key:
+                if not user_gemini_key and not st.session_state.is_admin:
                     st.session_state.ai_usage_count += 1
 
                 st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
@@ -589,7 +584,7 @@ elif menu_choice.startswith("2."):
     timeframe_label = f"{sel_month_name} {sel_year}"
     
     if st.button("🔮 Στρατηγική Ανάλυση Μήνα / Analyze Monthly Trends"):
-        if st.session_state.ai_usage_count >= MAX_FREE_ANALYSES and not user_gemini_key:
+        if st.session_state.ai_usage_count >= MAX_FREE_ANALYSES and not user_gemini_key and not st.session_state.is_admin:
             st.error("⚠️ Φτάσατε το συνολικό όριο των 3 δωρεάν αναλύσεων. Παρακαλώ καταχωρίστε το δικό σας Gemini API Key στο Sidebar για να συνεχίσετε!")
         else:
             with st.spinner("Υπολογισμός Μακρο-Κύκλων... / Calculating Macro Cycles..."):
@@ -597,7 +592,7 @@ elif menu_choice.startswith("2."):
                 m_transits = calculate_monthly_transits(natal_degrees, sel_year, sel_month_num)
                 report = analyze_transits_ai(selected_profile, timeframe_label, str(m_transits), lang=lang, user_api_key=user_gemini_key)
                 
-                if not user_gemini_key:
+                if not user_gemini_key and not st.session_state.is_admin:
                     st.session_state.ai_usage_count += 1
                     
                 st.session_state[f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"] = report
@@ -643,7 +638,7 @@ elif menu_choice.startswith("3."):
         
         if p1 != p2:
             if st.button("💖 Υπολογισμός Συναστρίας / Calculate Synastry"):
-                if st.session_state.ai_usage_count >= MAX_FREE_ANALYSES and not user_gemini_key:
+                if st.session_state.ai_usage_count >= MAX_FREE_ANALYSES and not user_gemini_key and not st.session_state.is_admin:
                     st.error("⚠️ Φτάσατε το συνολικό όριο των 3 δωρεάν αναλύσεων. Παρακαλώ καταχωρίστε το δικό σας Gemini API Key στο Sidebar για να συνεχίσετε!")
                 else:
                     pos1 = {p: extract_deg(v) for p, v in saved_profiles[p1]["positions"].items()}
@@ -656,7 +651,7 @@ elif menu_choice.startswith("3."):
                     with st.spinner("Ανάλυση... / Analyzing..."):
                         report = analyze_synastry_ai(p1, p2, str(syn_aspects), lang=lang, user_api_key=user_gemini_key)
                         
-                        if not user_gemini_key:
+                        if not user_gemini_key and not st.session_state.is_admin:
                             st.session_state.ai_usage_count += 1
                             
                         st.session_state[f"synastry_ai_{p1}_{p2}_{lang}"] = report
