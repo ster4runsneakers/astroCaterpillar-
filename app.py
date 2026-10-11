@@ -141,7 +141,7 @@ st.set_page_config(
     page_title="AstroCaterpillar AI",
     page_icon="🐛",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown("""
@@ -237,6 +237,10 @@ div[data-testid="stAlert"] { padding: .5rem .75rem !important; }
 .ac-foot { margin-top: .6rem !important; font-size: .78rem !important; }
 [data-testid="stChatMessage"] { padding: .5rem .7rem !important; }
 @media (max-width: 640px) { .block-container { padding-left: .7rem !important; padding-right: .7rem !important; } }
+
+/* ---- TOP NAV (χωρίς sidebar) ---- */
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], [data-testid="collapsedControl"] { display: none !important; }
+.ac-brand { font-size: 1.05rem; margin: 0 0 .1rem 0; color: #E2E8F0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -416,60 +420,56 @@ def collect_and_save_profile(key_prefix="sb"):
     return True
 
 
-# --- LANGUAGE SELECTOR ---
-st.sidebar.title("🐛 AstroCaterpillar")
-lang_choice = st.sidebar.selectbox("🌐 Γλώσσα / Language", ["Ελληνικά", "English"])
+# --- TOP BAR (γλώσσα + προφίλ) ---
+st.markdown('<p class="ac-brand">🐛 <b>AstroCaterpillar</b> AI</p>', unsafe_allow_html=True)
+bar1, bar2 = st.columns([1, 2.4])
+with bar1:
+    lang_choice = st.selectbox("🌐 Γλώσσα / Language", ["Ελληνικά", "English"])
 lang = "el" if lang_choice == "Ελληνικά" else "en"
 
 # --- PROFILE SOURCE CONTROLLER ---
 if st.session_state.is_admin:
     saved_profiles = load_profiles_from_db()
-    st.sidebar.success("🔑 Admin Mode Active")
 else:
     saved_profiles = st.session_state.guest_profiles
 
-# --- SIDEBAR & NAVIGATION ---
-t_profiles_header = "👤 Διαχείριση Προφίλ / Profile Management"
-st.sidebar.subheader(t_profiles_header)
-
 profile_names = list(saved_profiles.keys())
 new_prof_label = "-- Νέο Προφίλ / New Profile --"
-selected_profile = st.sidebar.selectbox(
-    "Επιλογή Προφίλ / Select Profile:",
-    [new_prof_label] + profile_names
-)
-
-if selected_profile == new_prof_label:
-    with st.sidebar.expander("➕ Προσθήκη Προφίλ / Add Profile", expanded=True):
-        collect_and_save_profile("sb")
-else:
-    st.sidebar.info(f"**{selected_profile}**")
-    btn_del = "🗑️ Αφαίρεση Προφίλ / Remove Profile"
-    if st.sidebar.button(btn_del):
-        if st.session_state.is_admin:
-            delete_profile_from_db(selected_profile)
-        else:
-            del st.session_state.guest_profiles[selected_profile]
-        st.rerun()
-
-if saved_profiles and not st.session_state.is_admin:
-    export_rows = []
-    for nm, pr in saved_profiles.items():
-        export_rows.append({
-            "name": nm,
-            "date": pr["date"].strftime("%Y-%m-%d") if hasattr(pr["date"], "strftime") else str(pr["date"]),
-            "time": pr["time"].strftime("%H:%M") if hasattr(pr["time"], "strftime") else str(pr["time"]),
-            "city": pr.get("city"),
-            "positions": pr.get("positions"),
-        })
-    st.sidebar.download_button(
-        "📥 Backup προφίλ (JSON)",
-        data=json.dumps(export_rows, ensure_ascii=False, indent=2),
-        file_name="astro_guest_backup.json",
-        mime="application/json",
+with bar2:
+    selected_profile = st.selectbox(
+        "👤 Προφίλ / Profile" + ("  ·  🔑 Admin" if st.session_state.is_admin else ""),
+        [new_prof_label] + profile_names,
     )
 
-st.sidebar.markdown("---")
+if selected_profile == new_prof_label:
+    with st.expander("➕ Προσθήκη Προφίλ / Add Profile", expanded=True):
+        collect_and_save_profile("sb")
+else:
+    act1, act2, act3 = st.columns([1, 1, 3])
+    with act1:
+        if st.button("🗑️ Αφαίρεση / Remove"):
+            if st.session_state.is_admin:
+                delete_profile_from_db(selected_profile)
+            else:
+                del st.session_state.guest_profiles[selected_profile]
+            st.rerun()
+    with act2:
+        if saved_profiles and not st.session_state.is_admin:
+            export_rows = []
+            for nm, pr in saved_profiles.items():
+                export_rows.append({
+                    "name": nm,
+                    "date": pr["date"].strftime("%Y-%m-%d") if hasattr(pr["date"], "strftime") else str(pr["date"]),
+                    "time": pr["time"].strftime("%H:%M") if hasattr(pr["time"], "strftime") else str(pr["time"]),
+                    "city": pr.get("city"),
+                    "positions": pr.get("positions"),
+                })
+            st.download_button(
+                "📥 Backup (JSON)",
+                data=json.dumps(export_rows, ensure_ascii=False, indent=2),
+                file_name="astro_guest_backup.json",
+                mime="application/json",
+            )
 
 menu_options = [
     "1. Γενέθλιος Χάρτης / Natal Chart",
@@ -479,30 +479,25 @@ menu_options = [
     "5. Οδηγός Αστρολογίας / Astrology Guide",
     "6. Admin Panel"
 ]
+menu_labels = ["Χάρτης", "Διελεύσεις", "Συναστρία", "PDF", "Οδηγός", "Admin"]
 if HAS_OPTION_MENU:
-    with st.sidebar:
-        menu_choice = option_menu(
-            menu_title="Πλοήγηση",
-            options=menu_options,
-            icons=["stars", "calendar3", "heart", "file-earmark-pdf", "book", "gear"],
-            menu_icon="bug",
-            default_index=0,
-            orientation="vertical",
-            styles={
-                "container": {"background-color": "transparent", "padding": "0"},
-                "icon": {"color": "#93C5FD", "font-size": "16px"},
-                "nav-link": {
-                    "color": "#E2E8F0",
-                    "font-size": "14px",
-                    "text-align": "left",
-                    "margin": "2px 0",
-                    "--hover-color": "#1E293B",
-                },
-                "nav-link-selected": {"background-color": "#1D4ED8"},
-            },
-        )
+    _sel = option_menu(
+        menu_title=None,
+        options=menu_labels,
+        icons=["stars", "calendar3", "heart", "file-earmark-pdf", "book", "gear"],
+        default_index=0,
+        orientation="horizontal",
+        styles={
+            "container": {"background-color": "rgba(15,23,42,.7)", "padding": "2px", "border-radius": "12px"},
+            "icon": {"color": "#93C5FD", "font-size": "14px"},
+            "nav-link": {"color": "#E2E8F0", "font-size": "13px", "text-align": "center",
+                         "margin": "0 1px", "padding": "6px 8px", "--hover-color": "#1E293B"},
+            "nav-link-selected": {"background-color": "#1D4ED8"},
+        },
+    )
 else:
-    menu_choice = st.sidebar.radio("Πλοήγηση / Navigation:", menu_options)
+    _sel = st.radio("Πλοήγηση", menu_labels, horizontal=True, label_visibility="collapsed")
+menu_choice = menu_options[menu_labels.index(_sel)]
 
 # --- MAIN CONTROLLER ---
 if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or menu_choice.startswith("6.")):
@@ -512,7 +507,7 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
       <h1 class="ac-title">🐛 AstroCaterpillar</h1>
       <p class="ac-sub">
         Γενέθλιος χάρτης, διελεύσεις και συναστρία — με ακρίβεια επιμεληρίου και αφήγηση AI.
-        Τα δεδομένα μένουν στη συσκευή σου. Στο κινητό συμπλήρωσε τη φόρμα από κάτω — ή πάτα το βελάκι πάνω αριστερά για το μενού.
+        Τα δεδομένα μένουν στη συσκευή σου. Συμπλήρωσε τη φόρμα «Προσθήκη Προφίλ» από πάνω.
       </p>
     </div>
     """, unsafe_allow_html=True)
@@ -559,7 +554,7 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
         )
 
     st.markdown(
-        '<p class="ac-foot">← Συμπλήρωσε τα πεδία αριστερά και πάτα Υπολογισμός Χάρτη<br/>Η εφαρμογή είναι συμβολική / ψυχαγωγική — όχι ιατρική, νομική ή οικονομική συμβουλή.</p>',
+        '<p class="ac-foot">↑ Συμπλήρωσε τα πεδία στη φόρμα πάνω και πάτα Υπολογισμός Χάρτη<br/>Η εφαρμογή είναι συμβολική / ψυχαγωγική — όχι ιατρική, νομική ή οικονομική συμβουλή.</p>',
         unsafe_allow_html=True,
     )
     st.stop()
