@@ -218,3 +218,15 @@ def calculate_houses(year, month, day, utc_hour, lat, lon, tz_name=None):
     houses["Asc"] = ascmc[0] % 360.0
     houses["MC"] = ascmc[1] % 360.0
     return houses
+
+
+def retro_planets(raw_positions, year, month, day, hour_decimal, tz_name=DEFAULT_TZ):
+    """Επιστρέφει λίστα αγγλικών ονομάτων αναδρόμων πλανητών.
+    Αν τα αποθηκευμένα δεδομένα δεν έχουν σημαία αναδρομής, ξαναϋπολογίζονται."""
+    src = raw_positions or {}
+    if not any(isinstance(v, dict) and "is_retro" in v for v in src.values()):
+        try:
+            src = calculate_natal_positions(year, month, day, hour_decimal, tz_name=tz_name)
+        except Exception:
+            src = raw_positions or {}
+    return [p for p, v in src.items() if isinstance(v, dict) and v.get("is_retro")]

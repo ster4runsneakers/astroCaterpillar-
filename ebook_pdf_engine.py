@@ -5,7 +5,7 @@ from datetime import datetime
 from weasyprint import HTML
 
 from ai_engine import analyze_natal_chart_ai, analyze_synastry_ai
-from ephemeris_engine import calculate_houses
+from ephemeris_engine import calculate_houses, extract_deg, retro_planets
 from elements_engine import calculate_elements_and_modalities
 from natal_aspects_engine import calculate_natal_aspects
 from synastry_engine import calculate_synastry_aspects
@@ -16,7 +16,8 @@ from cities_el import GREEK_AND_WORLD_CITIES, ZODIAC_SIGNS, PLANET_TRANSLATIONS
 def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str = "el") -> bytes:
     """Υπολογίζει αυτόματα τα αστρολογικά στοιχεία, παράγει την AI ανάλυση και συνθέτει ένα Ebook PDF."""
     
-    natal_pos = profile_data.get("positions", {})
+    raw_natal_pos = profile_data.get("positions", {})
+    natal_pos = {p: extract_deg(v) for p, v in raw_natal_pos.items()}
     b_date = profile_data.get("date")
     b_time = profile_data.get("time")
     city_name = profile_data.get("city", "Athens")
@@ -37,16 +38,33 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
     elements_pct, modalities_pct = calculate_elements_and_modalities(positions_signs)
     aspects = calculate_natal_aspects(natal_pos)
     cz_data = get_chinese_zodiac(b_date.year, b_date.month, b_date.day)
+    retro_en = retro_planets(raw_natal_pos, b_date.year, b_date.month, b_date.day, hour_decimal, tz_name)
+    retro_el = [PLANET_TRANSLATIONS.get(p, {}).get("el" if lang == "el" else "en", p) for p in retro_en]
+    retro_text = ("Αναδρομικοί πλανήτες: " + ", ".join(retro_el)) if (lang == "el" and retro_el) else (
+        "Retrograde planets: " + ", ".join(retro_el) if retro_el else
+        ("Κανένας πλανήτης δεν είναι αναδρομικός." if lang == "el" else "No planets are retrograde."))
 
     ai_report_markdown = analyze_natal_chart_ai(
         profile_name,
         str(natal_pos),
         str(houses),
         str(cz_data),
-        f"Elements: {elements_pct}, Modalities: {modalities_pct}",
+        f"Elements: {elements_pct}, Modalities: {modalities_pct}. {retro_text}",
         str(aspects),
         lang=lang
     )
+
+    if str(ai_report_markdown).startswith("⚠️"):
+        try:
+            from local_report import build_local_natal
+            _h = {}
+            try:
+                _h = houses
+            except Exception:
+                pass
+            ai_report_markdown = build_local_natal(profile_name, natal_pos, _h) or ai_report_markdown
+        except Exception:
+            pass
 
     formatted_ai = ai_report_markdown
     formatted_ai = re.sub(r'###\s*(.*)', r'<h3>\1</h3>', formatted_ai)
@@ -84,9 +102,10 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
         raw_deg = deg.get("deg", deg) if isinstance(deg, dict) else deg
         sign_display = ZODIAC_SIGNS.get(sign_en, {}).get(lang, sign_en)
         planet_display = PLANET_TRANSLATIONS.get(planet, {}).get(lang, planet)
+        r_mark = " ℞" if planet in retro_en else ""
         rows_html += f"""
         <tr>
-            <td><strong>{planet_display}</strong></td>
+            <td><strong>{planet_display}{r_mark}</strong></td>
             <td>{deg_in:.1f}° {sign_display}</td>
             <td>{float(raw_deg):.2f}°</td>
         </tr>
@@ -137,6 +156,7 @@ def create_full_astrology_ebook(profile_name: str, profile_data: dict, lang: str
                 {rows_html}
             </tbody>
         </table>
+        <p style="color:#a5b4fc;font-size:10pt;margin-top:-8px;"><strong>℞</strong> {retro_text}</p>
 
         <h2>{t_sec2}</h2>
         <div class="analysis-text">

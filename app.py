@@ -757,7 +757,8 @@ if menu_choice.startswith("1."):
                 pos_brief,
                 str({k: houses[k] for k in houses if str(k).startswith("House_") or k in ("Asc", "MC")}),
                 str(cz_data),
-                f"Elements: {elements_pct}, Modalities: {modalities_pct}",
+                f"Elements: {elements_pct}, Modalities: {modalities_pct}. " + (
+                    ("Αναδρομικοί πλανήτες: " + ", ".join(retro_names)) if retro_names else "Κανένας πλανήτης αναδρομικός."),
                 asp_brief,
                 lang=lang
             )
@@ -946,6 +947,19 @@ elif menu_choice.startswith("4."):
         st.subheader("📄 One-Pager Summary")
         if st.button("📥 Download One-Pager (PDF)"):
             with st.spinner("Δημιουργία... / Generating..."):
+                from ephemeris_engine import retro_planets
+                _ex_date, _ex_time = prof_data["date"], prof_data["time"]
+                _tz = GREEK_AND_WORLD_CITIES.get(prof_data["city"], {}).get("tz", "Europe/Athens")
+                _retro_en = retro_planets(prof_data["positions"], _ex_date.year, _ex_date.month, _ex_date.day,
+                                          _ex_time.hour + _ex_time.minute / 60.0, _tz)
+                _retro_el = [PLANET_TRANSLATIONS.get(p, {}).get("el", p) for p in _retro_en]
+                retro_line = ("Αναδρομικοί πλανήτες: " + ", ".join(_retro_el)) if _retro_el else "Κανένας πλανήτης αναδρομικός."
+                one_pager_text = st.session_state.get(f"natal_ai_{selected_profile}_{lang}", "Δεν έχει παραχθεί AI ανάλυση.")
+                one_pager_text += f"\n\n### ℞ Αναδρομικότητα\n{retro_line}"
+                _hist = st.session_state.chat_history.get(chat_bucket("natal", selected_profile), [])
+                if _hist:
+                    one_pager_text += "\n\n### Ερωτήσεις & Απαντήσεις AI\n" + "\n\n".join(
+                        ("**Ερώτηση:** " if m["role"] == "user" else "**AI:** ") + str(m["content"]) for m in _hist[-6:])
                 fig, ax = plt.subplots(figsize=(5, 5), facecolor='#121824', subplot_kw={'projection': 'polar'})
                 plot_natal_chart(ax, natal_degrees)
                 
@@ -954,8 +968,8 @@ elif menu_choice.startswith("4."):
                     selected_profile,
                     f"Date: {prof_data['date'].strftime('%d/%m/%Y')} | City: {prof_data['city']}",
                     fig_mat=fig,
-                    summary_info=f"Positions: {str(natal_degrees)}",
-                    ai_summary_text=st.session_state.get(f"natal_ai_{selected_profile}_{lang}", "Δεν έχει παραχθεί AI ανάλυση."),
+                    summary_info=f"Positions: {str(natal_degrees)} | " + retro_line,
+                    ai_summary_text=one_pager_text,
                     lang=lang
                 )
                 st.download_button("Download PDF", pdf_bytes, file_name=f"{selected_profile}_summary.pdf", mime="application/pdf")
