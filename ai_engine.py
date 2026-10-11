@@ -1,8 +1,10 @@
 # ai_engine.py
+import hashlib
 import os
 import time
 import streamlit as st
 from google import genai
+from google.genai import types as genai_types
 from openai import OpenAI
 
 GEMINI_MODELS = [
@@ -26,6 +28,39 @@ SYSTEM_PROMPT = (
     "συνδέοντας τους πλανήτες και τις όψεις με αλληγορίες. "
     "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα."
 )
+
+
+_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".ai_cache")
+_FRESH = False  # όταν True, αγνοεί την αποθηκευμένη ανάλυση και γράφει νέα
+
+
+def set_fresh(flag: bool):
+    global _FRESH
+    _FRESH = bool(flag)
+
+
+def _cache_path(prompt: str):
+    h = hashlib.sha256((SYSTEM_PROMPT + "\n" + prompt).encode("utf-8")).hexdigest()
+    return os.path.join(_CACHE_DIR, h + ".txt")
+
+
+def _cache_get(prompt: str):
+    if _FRESH:
+        return None
+    try:
+        with open(_cache_path(prompt), "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return None
+
+
+def _cache_put(prompt: str, text: str):
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        with open(_cache_path(prompt), "w", encoding="utf-8") as f:
+            f.write(text)
+    except Exception:
+        pass
 
 
 def _secret(name: str) -> str:
@@ -56,7 +91,18 @@ def _get_gemini_client(user_api_key=""):
         return genai.Client(api_key=master_key)
     return None
 
-def _generate_unified_response(prompt: str, user_api_key: str = ""):
+def _generate_unified_response(prompt: str, user_api_key: str = "", use_cache: bool = False):
+    if use_cache:
+        cached = _cache_get(prompt)
+        if cached:
+            return cached
+    result = _generate_raw(prompt, user_api_key)
+    if use_cache and result and not str(result).startswith("⚠️"):
+        _cache_put(prompt, result)
+    return result
+
+
+def _generate_raw(prompt: str, user_api_key: str = ""):
     last_errors = []
 
     gem_client = _get_gemini_client(user_api_key)
@@ -68,6 +114,7 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
                     resp = gem_client.models.generate_content(
                         model=g_model,
                         contents=full_prompt,
+                        config=genai_types.GenerateContentConfig(temperature=0.0, seed=42),
                     )
                     if resp and getattr(resp, "text", None):
                         return resp.text
@@ -85,6 +132,7 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
             xai = OpenAI(api_key=xai_key, base_url="https://api.x.ai/v1", timeout=45.0)
             response = xai.chat.completions.create(
                 model="grok-4",
+                temperature=0,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
@@ -101,6 +149,7 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
             try:
                 response = or_client.chat.completions.create(
                     model=model_name,
+                    temperature=0,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": prompt},
@@ -138,17 +187,17 @@ def analyze_natal_chart_ai(profile_name, raw_positions, houses, cz_data, indicat
        - **Πορεία Πεπρωμένου, Καριέρα & Ευκαιρίες**
     4. {lang_line}
     """
-    return _generate_unified_response(prompt, user_api_key)
+    return _generate_unified_response(prompt, user_api_key, use_cache=True)
 
 def analyze_transits_ai(profile_name, timeframe, transits_data, lang="el", user_api_key=""):
     lang_line = "Απάντησε στα Ελληνικά." if lang == "el" else "Reply in English."
     prompt = f"Ανάλυση διελεύσεων για '{profile_name}' ({timeframe}): {transits_data}\n{lang_line}"
-    return _generate_unified_response(prompt, user_api_key)
+    return _generate_unified_response(prompt, user_api_key, use_cache=True)
 
 def analyze_synastry_ai(p1, p2, synastry_aspects, lang="el", user_api_key=""):
     lang_line = "Απάντησε στα Ελληνικά." if lang == "el" else "Reply in English."
     prompt = f"Ανάλυση συναστρίας {p1} & {p2}: {synastry_aspects}\n{lang_line}"
-    return _generate_unified_response(prompt, user_api_key)
+    return _generate_unified_response(prompt, user_api_key, use_cache=True)
 
 def ask_caterpillar_chat(context_text, user_prompt, lang="el", user_api_key=""):
     lang_line = "Απάντησε στα Ελληνικά." if lang == "el" else "Reply in English."

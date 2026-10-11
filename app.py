@@ -53,7 +53,8 @@ from ai_engine import (
     analyze_synastry_ai,
     analyze_transits_ai,
     ask_caterpillar_chat,
-    clear_ai_cache
+    clear_ai_cache,
+    set_fresh
 )
 from pdf_engine import create_astrology_pdf
 from ebook_pdf_engine import create_full_astrology_ebook, create_synastry_ebook
@@ -748,8 +749,10 @@ if menu_choice.startswith("1."):
     st.markdown("---")
     st.subheader("🤖 AstroCaterpillar AI Analysis")
     
+    fresh_ai = st.checkbox("🔄 Νέα εκδοχή ανάλυσης (αλλιώς εμφανίζεται πάντα η ίδια για τον ίδιο χάρτη)", value=False, key="fresh_ai")
     btn_ai = "🚀 Παραγωγή AI Ανάλυσης / Generate AI Analysis"
     if st.button(btn_ai):
+        set_fresh(fresh_ai)
         with st.spinner("Ο AstroCaterpillar αναλύει τα δεδομένα... / Analyzing..."):
             pos_brief, asp_brief = format_chart_brief(natal_pos, houses, aspects, lang=lang)
             report = analyze_natal_chart_ai(
