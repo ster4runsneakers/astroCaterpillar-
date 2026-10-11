@@ -22,6 +22,7 @@ from cities_el import GREEK_AND_WORLD_CITIES, ZODIAC_SIGNS, PLANET_TRANSLATIONS
 from ephemeris_engine import calculate_natal_positions, calculate_houses
 
 
+@st.cache_data(show_spinner=False, max_entries=256)
 def safe_natal_positions(year, month, day, hour_decimal, tz_name="Europe/Athens"):
     try:
         return calculate_natal_positions(year, month, day, hour_decimal, tz_name=tz_name)
@@ -29,6 +30,7 @@ def safe_natal_positions(year, month, day, hour_decimal, tz_name="Europe/Athens"
         return calculate_natal_positions(year, month, day, hour_decimal)
 
 
+@st.cache_data(show_spinner=False, max_entries=256)
 def safe_houses(year, month, day, hour_decimal, lat, lon, tz_name=None):
     try:
         return calculate_houses(year, month, day, hour_decimal, lat, lon, tz_name=tz_name)
@@ -48,6 +50,14 @@ from synastry_engine import calculate_synastry_aspects, calculate_monthly_transi
 from chinese_astrology import get_chinese_zodiac
 from chart_plotter import plot_natal_chart, plot_biwheel_chart, create_interactive_natal_plotly, create_interactive_synastry_plotly
 
+from local_transits import (
+    compute_transit_windows, monthly_summary_markdown, month_brief,
+)
+from summary_el import build_short_summary
+from local_report import build_local_natal
+import persistence
+from ephemeris_engine import retro_planets
+
 from ai_engine import (
     analyze_natal_chart_ai,
     analyze_synastry_ai,
@@ -58,6 +68,27 @@ from ai_engine import (
 )
 from pdf_engine import create_astrology_pdf
 from ebook_pdf_engine import create_full_astrology_ebook, create_synastry_ebook
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def cached_natal_plotly(raw_natal_pos, houses, lang):
+    return create_interactive_natal_plotly(raw_natal_pos, houses, lang=lang)
+
+
+@st.cache_data(show_spinner=False, ttl=6 * 3600, max_entries=32)
+def cached_transit_windows(natal_items, start_iso, days=180):
+    """natal_items: tuple((σημείο, μοίρες), ...) — κρατιέται στη μνήμη, δεν ξαναϋπολογίζεται."""
+    return compute_transit_windows(dict(natal_items), datetime.date.fromisoformat(start_iso), days=days)
+
+
+def quick_buttons(prefix, options):
+    """Έτοιμες ερωτήσεις: επιστρέφει το κείμενο της ερώτησης που πατήθηκε (ή None)."""
+    picked = None
+    cols = st.columns(len(options))
+    for i, (label, q) in enumerate(options):
+        if cols[i].button(label, key=f"{prefix}_quick_{i}", use_container_width=True):
+            picked = q
+    return picked
+
 
 # --- DICTIONARIES FOR BILINGUAL INDICATORS & GUIDES ---
 CHINESE_TRANSLATIONS = {
@@ -293,6 +324,7 @@ def save_profile_to_db(name, d, t, city, positions):
     )
     conn.commit()
     conn.close()
+    sync_backup()
 
 def delete_profile_from_db(name):
     conn = sqlite3.connect(DB_FILE)
@@ -300,6 +332,7 @@ def delete_profile_from_db(name):
     c.execute('DELETE FROM profiles WHERE name = ?', (name,))
     conn.commit()
     conn.close()
+    sync_backup()
 
 def export_db_as_json():
     conn = sqlite3.connect(DB_FILE)
@@ -339,11 +372,78 @@ def import_db_from_json(json_content):
             imported_count += 1
     conn.commit()
     conn.close()
+    if imported_count:
+        try:
+            sync_backup()
+        except Exception:
+            pass
     return imported_count
+
+def _backup_token():
+    try:
+        from ai_engine import _secret
+        return _secret("GITHUB_TOKEN")
+    except Exception:
+        return ""
+
+
+def sync_backup():
+    """Μετά από κάθε αλλαγή προφίλ: στέλνει αντίγραφο στο GitHub (αν υπάρχει GITHUB_TOKEN στα Secrets)."""
+    token = _backup_token()
+    if not token:
+        st.session_state["backup_status"] = "Δεν έχει οριστεί GITHUB_TOKEN — το αντίγραφο ασφαλείας είναι χειροκίνητο."
+        return
+    ok, msg = persistence.push_gist(token, export_db_as_json())
+    st.session_state["backup_status"] = ("✅ " if ok else "⚠️ ") + msg
+
+
+def count_db_profiles():
+    conn = sqlite3.connect(DB_FILE)
+    n = conn.execute("SELECT COUNT(*) FROM profiles").fetchone()[0]
+    conn.close()
+    return n
+
+
+def auto_restore_profiles():
+    """Αν η βάση είναι άδεια (π.χ. μετά από restart): επαναφορά από GitHub gist ή από profiles_backup.json."""
+    if st.session_state.get("_restore_tried"):
+        return
+    st.session_state["_restore_tried"] = True
+    try:
+        if count_db_profiles() > 0:
+            return
+        token = _backup_token()
+        for source, text in (("GitHub backup", persistence.pull_gist(token) if token else None),
+                             ("profiles_backup.json", persistence.read_file_backup())):
+            if text and persistence.validate_backup(text):
+                n = import_db_from_json(text)
+                st.session_state["backup_status"] = f"♻️ Επαναφέρθηκαν {n} προφίλ από {source}."
+                return
+    except Exception:
+        pass
+
+
+def guest_profiles_from_json(text):
+    data = json.loads(text)
+    n = 0
+    for it in data:
+        try:
+            st.session_state.guest_profiles[it["name"]] = {
+                "date": datetime.datetime.strptime(it["date"], "%Y-%m-%d").date(),
+                "time": datetime.datetime.strptime(it["time"], "%H:%M").time(),
+                "city": it["city"], "positions": it["positions"],
+            }
+            n += 1
+        except Exception:
+            continue
+    return n
+
 
 # --- SESSION STATE INITIALIZATION ---
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
+
+auto_restore_profiles()
 
 if "guest_profiles" not in st.session_state:
     st.session_state.guest_profiles = {}
@@ -470,6 +570,17 @@ else:
                 file_name="astro_guest_backup.json",
                 mime="application/json",
             )
+
+if selected_profile != new_prof_label and not st.session_state.is_admin:
+    with st.expander("📤 Φόρτωση backup προφίλ (JSON)"):
+        _gu = st.file_uploader("Αρχείο backup", type=["json"], key="guest_bk_up")
+        if _gu is not None and st.button("Φόρτωση", key="guest_bk_go"):
+            try:
+                n = guest_profiles_from_json(_gu.read().decode("utf-8"))
+                st.success(f"Φορτώθηκαν {n} προφίλ.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Σφάλμα: {e}")
 
 menu_options = [
     "1. Γενέθλιος Χάρτης / Natal Chart",
@@ -640,11 +751,24 @@ if menu_choice.startswith("1."):
     cz_animal_bi = CHINESE_TRANSLATIONS.get(cz_animal_raw, cz_animal_raw)
     cz_element_bi = CHINESE_TRANSLATIONS.get(cz_element_raw, cz_element_raw)
 
+    try:
+        _retro_en = retro_planets(
+            raw_natal_pos, b_date.year, b_date.month, b_date.day,
+            b_time.hour + b_time.minute / 60.0, tz_name=tz_name,
+        )
+    except Exception:
+        _retro_en = []
+    _brief = build_short_summary(selected_profile, natal_pos, houses, _retro_en)
+    if _brief:
+        st.markdown("### ✨ Σύνοψη")
+        st.markdown(_brief)
+        st.markdown("---")
+
     col1, col2 = st.columns([1.1, 0.9])
     
     with col1:
         st.subheader("🪐 Διαδραστικός Χάρτης (Hover/Touch) / Interactive Chart")
-        plotly_fig = create_interactive_natal_plotly(raw_natal_pos, houses, lang=lang)
+        plotly_fig = cached_natal_plotly(raw_natal_pos, houses, lang)
         st.plotly_chart(plotly_fig, use_container_width=True)
         # Αναδρομικότητα: αν το αποθηκευμένο προφίλ δεν έχει σημαία (παλιά δεδομένα), ξαναϋπολογίζεται
         retro_src = raw_natal_pos
@@ -797,35 +921,59 @@ if menu_choice.startswith("1."):
             st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
 
     cache_key = f"natal_ai_{selected_profile}_{lang}"
-    if cache_key in st.session_state:
-        report_text = st.session_state[cache_key]
-        st.markdown(report_text)
-        
+    ai_report = st.session_state.get(cache_key)
+    if ai_report:
+        st.markdown(ai_report)
         st.download_button(
             label="📥 Download AI Report (.txt)",
-            data=report_text,
+            data=ai_report,
             file_name=f"AstroCaterpillar_Report_{selected_profile}.txt",
             mime="text/plain"
         )
-        
-        st.markdown("---")
-        st.subheader("💬 Chat με τον AstroCaterpillar (Γενέθλιος Χάρτης)")
-        
-        # Display history
-        natal_chat_key = chat_bucket("natal", selected_profile)
-        for msg in st.session_state.chat_history[natal_chat_key]:
-            with st.chat_message(msg["role"]):
-                st.write(msg["content"])
-                
-        user_q = st.chat_input("Κάνε μια ερώτηση πάνω στον γενέθλιο χάρτη σου...")
-        if user_q:
-            st.session_state.chat_history[natal_chat_key].append({"role": "user", "content": user_q})
-            with st.spinner("Σκέφτεται... / Thinking..."):
-                history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[natal_chat_key]])
-                full_prompt = f"Αρχική Ανάλυση:\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
-                st.session_state.chat_history[natal_chat_key].append({"role": "assistant", "content": ans})
-                st.rerun()
+
+    st.markdown("---")
+    st.subheader("💬 Chat με τον AstroCaterpillar (Γενέθλιος Χάρτης)")
+    if not ai_report:
+        st.caption("Μπορείς να ρωτήσεις κατευθείαν — δεν χρειάζεται πρώτα η AI ανάλυση.")
+    try:
+        chat_context = ai_report or build_local_natal(selected_profile, natal_pos, houses)
+    except Exception:
+        chat_context = ""
+    chat_context = (chat_context or "") + "\n\nΑναδρομικοί πλανήτες: " + (", ".join(retro_names) if retro_names else "κανένας")
+
+    natal_chat_key = chat_bucket("natal", selected_profile)
+    quick_q = quick_buttons("natal", [
+        ("℞ Αναδρομικοί", "Τι σημαίνουν οι αναδρομικοί πλανήτες στον χάρτη μου και πώς με επηρεάζουν στην καθημερινότητα; Δώσε απλά παραδείγματα."),
+        ("💕 Αγάπη", "Πώς είμαι στις σχέσεις και στον έρωτα; Τι χρειάζομαι και τι πρέπει να προσέχω; Δώσε συγκεκριμένα παραδείγματα."),
+        ("💼 Καριέρα", "Ποιες δουλειές και τρόποι δουλειάς μου ταιριάζουν και πώς να προχωρήσω επαγγελματικά και οικονομικά;"),
+        ("📅 Αυτός ο μήνας", "__MONTH__"),
+        ("💪 Δυνατά/αδύνατα", "Ποια είναι τα 3 δυνατά και τα 3 αδύνατα σημεία μου; Απάντησε απλά με παραδείγματα."),
+    ])
+    if quick_q == "__MONTH__":
+        _today = datetime.date.today()
+        try:
+            _pts = dict(natal_pos)
+            _pts["Asc"], _pts["MC"] = houses.get("Asc", 0.0), houses.get("MC", 0.0)
+            _w = cached_transit_windows(tuple(sorted(_pts.items())), _today.replace(day=1).isoformat(), 60)
+            _mb = month_brief(_w, _today.year, _today.month)
+        except Exception:
+            _mb = "άγνωστες"
+        quick_q = (f"Τι να περιμένω αυτόν τον μήνα ({_today.month}/{_today.year}); "
+                   f"Βασικές διελεύσεις προς τον χάρτη μου: {_mb}. Απάντησε απλά και πρακτικά.")
+
+    for msg in st.session_state.chat_history[natal_chat_key]:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+
+    user_q = st.chat_input("Κάνε μια ερώτηση πάνω στον γενέθλιο χάρτη σου...") or quick_q
+    if user_q:
+        st.session_state.chat_history[natal_chat_key].append({"role": "user", "content": user_q})
+        with st.spinner("Σκέφτεται... / Thinking..."):
+            history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[natal_chat_key]])
+            full_prompt = f"Ανάλυση / στοιχεία χάρτη:\n{chat_context}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
+            ans = ask_caterpillar_chat(chat_context, full_prompt, lang=lang)
+            st.session_state.chat_history[natal_chat_key].append({"role": "assistant", "content": ans})
+            st.rerun()
 
 # --- TAB 2: MONTHLY TRANSITS ---
 elif menu_choice.startswith("2."):
@@ -851,6 +999,27 @@ elif menu_choice.startswith("2."):
     
     timeframe_label = f"{sel_month_name} {sel_year}"
     
+    # --- ΤΟΠΙΚΕΣ ΔΙΕΛΕΥΣΕΙΣ (χωρίς AI) ---
+    _t_city = GREEK_AND_WORLD_CITIES.get(prof_data["city"], {})
+    _t_tz = _t_city.get("tz", "Europe/Athens")
+    _t_houses = safe_houses(
+        prof_data["date"].year, prof_data["date"].month, prof_data["date"].day,
+        prof_data["time"].hour + prof_data["time"].minute / 60.0,
+        _t_city.get("lat", 37.9838), _t_city.get("lon", 23.7275), tz_name=_t_tz,
+    )
+    _t_pts = {p: extract_deg(v) for p, v in prof_data["positions"].items()}
+    _t_pts["Asc"], _t_pts["MC"] = _t_houses.get("Asc", 0.0), _t_houses.get("MC", 0.0)
+    _t_start = datetime.date.today()
+    st.subheader("🔭 Τι έρχεται τους επόμενους 6 μήνες (χωρίς AI)")
+    with st.spinner("Υπολογίζω τις διελεύσεις… την πρώτη φορά κάνει λίγο, μετά είναι άμεσο."):
+        local_windows = cached_transit_windows(tuple(sorted(_t_pts.items())), _t_start.isoformat(), 180)
+    local_md = monthly_summary_markdown(local_windows, _t_start, months=6)
+    st.markdown(local_md)
+    st.caption("Υπολογισμός με τη μηχανή θέσεων της εφαρμογής: Άρης, Δίας, Κρόνος, Ουρανός, Ποσειδώνας, Πλούτωνας προς τα γενέθλια σημεία σου. Οι ημερομηνίες είναι κατά προσέγγιση (±1-2 ημέρες).")
+    st.download_button("📥 Κατέβασμα (.txt)", data=local_md, file_name=f"Transits_6m_{selected_profile}.txt", mime="text/plain")
+    st.markdown("---")
+    st.subheader("🤖 Ανάλυση AI για συγκεκριμένο μήνα")
+
     if st.button("🔮 Στρατηγική Ανάλυση Μήνα / Analyze Monthly Trends"):
         with st.spinner("Υπολογισμός Μακρο-Κύκλων... / Calculating Macro Cycles..."):
             natal_degrees = {p: extract_deg(v) for p, v in prof_data["positions"].items()}
@@ -859,34 +1028,40 @@ elif menu_choice.startswith("2."):
             st.session_state[f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"] = report
 
     t_cache_key = f"transits_ai_{selected_profile}_{sel_month_num}_{sel_year}_{lang}"
-    if t_cache_key in st.session_state:
-        report_text = st.session_state[t_cache_key]
-        st.markdown(report_text)
-        
+    ai_tr = st.session_state.get(t_cache_key)
+    if ai_tr:
+        st.markdown(ai_tr)
         st.download_button(
             label="📥 Download Transits Report (.txt)",
-            data=report_text,
+            data=ai_tr,
             file_name=f"Transits_Report_{selected_profile}_{sel_month_num}_{sel_year}.txt",
             mime="text/plain"
         )
-        
-        st.markdown("---")
-        st.subheader("💬 Chat με τον AstroCaterpillar (Διελεύσεις)")
-        
-        tr_chat_key = chat_bucket("transits", f"{selected_profile}:{sel_month_num}:{sel_year}")
-        for msg in st.session_state.chat_history[tr_chat_key]:
-            with st.chat_message(msg["role"]):
-                st.write(msg["content"])
-                
-        user_q = st.chat_input("Κάνε μια ερώτηση πάνω στις διελεύσεις του μήνα...")
-        if user_q:
-            st.session_state.chat_history[tr_chat_key].append({"role": "user", "content": user_q})
-            with st.spinner("Σκέφτεται... / Thinking..."):
-                history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[tr_chat_key]])
-                full_prompt = f"Αρχική Ανάλυση Διελεύσεων ({timeframe_label}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
-                ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
-                st.session_state.chat_history[tr_chat_key].append({"role": "assistant", "content": ans})
-                st.rerun()
+
+    st.markdown("---")
+    st.subheader("💬 Chat με τον AstroCaterpillar (Διελεύσεις)")
+    report_text = ai_tr or ("Διελεύσεις επόμενων μηνών (τοπικός υπολογισμός):\n" + local_md)
+    tr_chat_key = chat_bucket("transits", f"{selected_profile}:{sel_month_num}:{sel_year}")
+    _mbrief = month_brief(local_windows, int(sel_year), sel_month_num)
+    quick_t = quick_buttons("transits", [
+        ("📅 Αυτός ο μήνας", f"Τι να περιμένω τον μήνα {timeframe_label}; Βασικές διελεύσεις: {_mbrief}. Απάντησε απλά και πρακτικά."),
+        ("💕 Αγάπη", f"Τι σημαίνουν οι διελεύσεις του μήνα {timeframe_label} για τις σχέσεις μου; Διελεύσεις: {_mbrief}."),
+        ("💼 Καριέρα/χρήματα", f"Τι σημαίνουν οι διελεύσεις του μήνα {timeframe_label} για δουλειά και χρήματα; Διελεύσεις: {_mbrief}."),
+        ("⚠️ Τι να προσέξω", f"Τι να προσέξω τον μήνα {timeframe_label}; Διελεύσεις: {_mbrief}. Δώσε 3 πρακτικές συμβουλές."),
+    ])
+    for msg in st.session_state.chat_history[tr_chat_key]:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+
+    user_q = st.chat_input("Κάνε μια ερώτηση πάνω στις διελεύσεις του μήνα...") or quick_t
+    if user_q:
+        st.session_state.chat_history[tr_chat_key].append({"role": "user", "content": user_q})
+        with st.spinner("Σκέφτεται... / Thinking..."):
+            history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[tr_chat_key]])
+            full_prompt = f"Ανάλυση Διελεύσεων ({timeframe_label}):\n{report_text}\n\nΙστορικό Συζήτησης:\n{history_text}\n\nΤελευταία Ερώτηση: {user_q}"
+            ans = ask_caterpillar_chat(report_text, full_prompt, lang=lang)
+            st.session_state.chat_history[tr_chat_key].append({"role": "assistant", "content": ans})
+            st.rerun()
 
 # --- TAB 3: SYNASTRY ---
 # --- TAB 3: SYNASTRY ---
@@ -1066,6 +1241,14 @@ elif menu_choice.startswith("6."):
         st.success("Είστε συνδεδεμένος ως Admin / Logged in as Admin!")
         db_profiles = load_profiles_from_db()
         st.write(f"**Μόνιμα Αποθηκευμένα Προφίλ στη Βάση:** {len(db_profiles)}")
+        st.info(st.session_state.get("backup_status", "Δεν έχει γίνει ακόμα συγχρονισμός backup σε αυτή τη συνεδρία."))
+        if _backup_token():
+            if st.button("☁️ Αποθήκευση τώρα στο GitHub backup"):
+                sync_backup()
+                st.rerun()
+        else:
+            st.caption("Για αυτόματο backup πρόσθεσε στα Secrets: GITHUB_TOKEN (token με δικαίωμα «gist»). "
+                       "Αλλιώς κατέβασε το JSON παρακάτω και ανέβασέ το στο repo ως profiles_backup.json.")
         
         st.markdown("---")
         st.subheader("📦 Διαχείριση, Backup & Εισαγωγή Βάσης / Database Management")
