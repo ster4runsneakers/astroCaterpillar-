@@ -739,6 +739,15 @@ if menu_choice.startswith("1."):
                 asp_brief,
                 lang=lang
             )
+            if str(report).startswith("⚠️"):
+                try:
+                    from local_report import build_local_natal
+                    local_txt = build_local_natal(selected_profile, natal_pos, houses)
+                    if local_txt:
+                        report = ("ℹ️ Το AI δεν απάντησε αυτή τη στιγμή — ορίστε η βασική ανάλυση του χάρτη σου:\n\n"
+                                  + local_txt)
+                except Exception:
+                    pass
             st.session_state[f"natal_ai_{selected_profile}_{lang}"] = report
 
     cache_key = f"natal_ai_{selected_profile}_{lang}"
