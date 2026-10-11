@@ -984,12 +984,11 @@ elif menu_choice.startswith("6."):
     if not st.session_state.is_admin:
         admin_pass = st.text_input("Κωδικός Πρόσβασης / Admin Password:", type="password")
         if st.button("Σύνδεση ως Admin / Login"):
-            expected_admin = (
-                st.secrets.get("ADMIN_PASSWORD", "")
-                or __import__("os").getenv("ADMIN_PASSWORD", "")
-                or "admin123"
-            )
-            if admin_pass and admin_pass == expected_admin:
+            from ai_engine import _secret
+            expected_admin = _secret("ADMIN_PASSWORD")
+            if not expected_admin:
+                st.error("Δεν έχει οριστεί ADMIN_PASSWORD στα Secrets.")
+            elif admin_pass and admin_pass == expected_admin:
                 st.session_state.is_admin = True
                 st.success("Πρόσβαση εγκρίθηκε! / Access Granted!")
                 st.rerun()
