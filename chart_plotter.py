@@ -73,6 +73,8 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None, lang: 
     p_r, p_theta, p_text, p_hover, p_color = [], [], [], [], []
     prev_deg = -999
     current_radius = 0.85
+    RADII = [0.85, 0.70, 0.55, 0.40]
+    last_deg_at = {}
 
     for planet, val in sorted_planets:
         deg, is_retro = extract_planet_info(val)
@@ -86,10 +88,14 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None, lang: 
             status = "Retrograde (R)" if is_retro else "Direct"
             hover_txt = f"<b>{planet_display}</b> ({symbol})<br><b>Degree:</b> {deg:.2f}°<br><b>Status:</b> {status}"
 
-        if abs(deg - prev_deg) < 5.0 or abs(deg - prev_deg) > 355.0:
-            current_radius = 0.72 if current_radius == 0.85 else 0.85
-        else:
-            current_radius = 0.85
+        # Αποφυγή επικάλυψης: πρώτη ακτίνα όπου η γωνιακή απόσταση από το τελευταίο σύμβολο ≥ 10°
+        current_radius = RADII[-1]
+        for _r in RADII:
+            _last = last_deg_at.get(_r)
+            if _last is None or min(abs(deg - _last), 360.0 - abs(deg - _last)) >= 10.0:
+                current_radius = _r
+                break
+        last_deg_at[current_radius] = deg
         prev_deg = deg
 
         display_text = f"<b>{symbol} (R)</b>" if is_retro else symbol
