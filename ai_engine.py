@@ -27,12 +27,21 @@ SYSTEM_PROMPT = (
     "ΑΠΑΓΟΡΕΥΟΝΤΑΙ οι ψυχρές λίστες με μοίρες. ΟΦΕΙΛΕΙΣ να ερμηνεύεις και να συνθέτεις τα δεδομένα."
 )
 
+
+def _secret(name: str) -> str:
+    """Safe secret lookup: never crashes when secrets.toml is missing."""
+    try:
+        val = st.secrets.get(name, "")
+    except Exception:
+        val = ""
+    return str(val or os.getenv(name, "") or "").strip()
+
 def _get_openrouter_client(user_api_key=""):
     clean_user_key = user_api_key.strip() if user_api_key else ""
     if clean_user_key and clean_user_key.startswith("sk-or-"):
         return OpenAI(api_key=clean_user_key, base_url="https://openrouter.ai/api/v1", timeout=45.0)
 
-    master_key = (st.secrets.get("OPENROUTER_API_KEY", "") or os.getenv("OPENROUTER_API_KEY", "")).strip()
+    master_key = _secret("OPENROUTER_API_KEY")
     if master_key:
         return OpenAI(api_key=master_key, base_url="https://openrouter.ai/api/v1", timeout=45.0)
     return None
@@ -42,7 +51,7 @@ def _get_gemini_client(user_api_key=""):
     if clean_user_key and not clean_user_key.startswith("sk-"):
         return genai.Client(api_key=clean_user_key)
     
-    master_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", "")).strip()
+    master_key = _secret("GEMINI_API_KEY")
     if master_key:
         return genai.Client(api_key=master_key)
     return None
@@ -70,7 +79,7 @@ def _generate_unified_response(prompt: str, user_api_key: str = ""):
                         continue
                     break
 
-    xai_key = (st.secrets.get("XAI_API_KEY", "") or os.getenv("XAI_API_KEY", "")).strip()
+    xai_key = _secret("XAI_API_KEY")
     if xai_key:
         try:
             xai = OpenAI(api_key=xai_key, base_url="https://api.x.ai/v1", timeout=45.0)
