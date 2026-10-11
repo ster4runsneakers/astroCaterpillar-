@@ -210,6 +210,33 @@ h1, h2, h3 { font-family: 'Cormorant Garamond', serif; color: #F8FAFC; letter-sp
 .ac-card p { color:#94A3B8; font-size:.92rem; margin:0; line-height:1.5; }
 .ac-step { color:#64748B; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; margin:0 0 .25rem 0; }
 .ac-foot { color:#64748B; font-size:.85rem; text-align:center; margin-top:1.5rem; line-height:1.55; }
+
+/* ---- COMPACT UI ---- */
+.block-container { padding-top: .6rem !important; padding-bottom: 1.2rem !important; max-width: 1180px !important; }
+[data-testid="stVerticalBlock"] { gap: .55rem !important; }
+[data-testid="stSidebar"] { min-width: 235px !important; max-width: 260px !important; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: .4rem !important; }
+[data-testid="stSidebarUserContent"] { padding-top: .8rem !important; }
+h1 { font-size: 1.7rem !important; margin: .2rem 0 .3rem !important; padding: 0 !important; }
+h2 { font-size: 1.4rem !important; margin: .2rem 0 .25rem !important; padding: 0 !important; }
+h3 { font-size: 1.12rem !important; margin: .15rem 0 .2rem !important; padding: 0 !important; }
+h4 { font-size: 1rem !important; margin: .1rem 0 !important; }
+p, li, .stMarkdown { font-size: .93rem; line-height: 1.45; }
+hr { margin: .6rem 0 !important; }
+.stButton>button, .stDownloadButton>button { padding: .35rem .8rem !important; font-size: .9rem !important; border-radius: 10px !important; box-shadow: none !important; }
+div[data-testid="stExpander"] { margin: 0 !important; }
+div[data-testid="stExpander"] summary { padding: .35rem .6rem !important; font-size: .9rem; }
+[data-testid="stDataFrame"] { font-size: .85rem; }
+div[data-testid="stAlert"] { padding: .5rem .75rem !important; }
+.ac-hero { padding: 1.1rem 1.1rem .9rem !important; border-radius: 16px !important; margin-bottom: .6rem !important; }
+.ac-title { font-size: clamp(1.5rem,3.5vw,2.1rem) !important; margin: 0 0 .3rem !important; }
+.ac-sub { font-size: .92rem !important; line-height: 1.45 !important; }
+.ac-card { padding: .7rem .8rem !important; border-radius: 12px !important; }
+.ac-card h3 { font-size: 1.05rem !important; }
+.ac-card p { font-size: .85rem !important; }
+.ac-foot { margin-top: .6rem !important; font-size: .78rem !important; }
+[data-testid="stChatMessage"] { padding: .5rem .7rem !important; }
+@media (max-width: 640px) { .block-container { padding-left: .7rem !important; padding-right: .7rem !important; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -503,10 +530,8 @@ if selected_profile == new_prof_label and not (menu_choice.startswith("5.") or m
             unsafe_allow_html=True,
         )
 
-    st.markdown("<br/>", unsafe_allow_html=True)
     with st.expander("📱 Ξεκίνα εδώ (ιδανικό από κινητό)", expanded=True):
         collect_and_save_profile("mob")
-    st.markdown("<br/>", unsafe_allow_html=True)
     if HAS_SAC:
         try:
             sac.steps(
@@ -652,7 +677,7 @@ if menu_choice.startswith("1."):
                 "Οίκος": house_of_degree(deg, houses) or "-",
                 "Αναδρομή": "℞ Αναδρομικός" if is_r else "Ευθεία κίνηση",
             })
-        st.dataframe(table_rows, use_container_width=True, hide_index=True)
+        st.dataframe(table_rows, use_container_width=True, hide_index=True, height=min(35 * (len(table_rows) + 1) + 3, 420))
         if retro_names:
             st.info("℞ Αναδρομικοί πλανήτες: " + ", ".join(retro_names))
         else:

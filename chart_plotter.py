@@ -161,7 +161,7 @@ def create_interactive_natal_plotly(positions: dict, houses: dict = None, lang: 
         plot_bgcolor="#0E1117",
         margin=dict(l=20, r=20, t=20, b=20),
         showlegend=False,
-        height=520
+        height=430
     )
     return fig
 # --- MATPLOTLIB STATIC CHART (FOR PDF EXPORT) ---
@@ -303,7 +303,7 @@ def create_interactive_synastry_plotly(pos1, pos2, name1="Άτομο 1", name2="
         paper_bgcolor='#0E1117',
         plot_bgcolor='#0E1117',
         margin=dict(l=20, r=20, t=20, b=20),
-        height=450,
+        height=400,
         showlegend=False
     )
 
