@@ -625,21 +625,43 @@ if menu_choice.startswith("1."):
         st.subheader("🪐 Διαδραστικός Χάρτης (Hover/Touch) / Interactive Chart")
         plotly_fig = create_interactive_natal_plotly(raw_natal_pos, houses, lang=lang)
         st.plotly_chart(plotly_fig, use_container_width=True)
+        # Αναδρομικότητα: αν το αποθηκευμένο προφίλ δεν έχει σημαία (παλιά δεδομένα), ξαναϋπολογίζεται
+        retro_src = raw_natal_pos
+        if not any(isinstance(v, dict) and "is_retro" in v for v in raw_natal_pos.values()):
+            try:
+                retro_src = safe_natal_positions(
+                    b_date.year, b_date.month, b_date.day,
+                    b_time.hour + b_time.minute / 60.0, tz_name=tz_name
+                )
+            except Exception:
+                retro_src = raw_natal_pos
         table_rows = []
+        retro_names = []
         for planet, deg in natal_pos.items():
             sign, din = get_sign_from_degrees(deg)
             sign_el = ZODIAC_SIGNS.get(sign, {}).get("el", sign)
-            retro = ""
-            raw = raw_natal_pos.get(planet)
-            if isinstance(raw, dict) and raw.get("is_retro"):
-                retro = "R"
+            raw = retro_src.get(planet)
+            is_r = bool(isinstance(raw, dict) and raw.get("is_retro"))
+            pname = PLANET_TRANSLATIONS.get(planet, {}).get("el", planet)
+            if is_r:
+                retro_names.append(pname)
             table_rows.append({
-                "Πλανήτης": PLANET_TRANSLATIONS.get(planet, {}).get("el", planet),
+                "Πλανήτης": pname,
                 "Ζώδιο": f"{din:.1f}° {sign_el}",
                 "Οίκος": house_of_degree(deg, houses) or "-",
-                "R": retro,
+                "Αναδρομή": "℞ Αναδρομικός" if is_r else "Ευθεία κίνηση",
             })
         st.dataframe(table_rows, use_container_width=True, hide_index=True)
+        if retro_names:
+            st.info("℞ Αναδρομικοί πλανήτες: " + ", ".join(retro_names))
+        else:
+            st.caption("Κανένας πλανήτης δεν είναι αναδρομικός σε αυτόν τον χάρτη.")
+        try:
+            from ephemeris_engine import HAS_SWE
+            if not HAS_SWE:
+                st.warning("Η βιβλιοθήκη Swiss Ephemeris δεν φορτώθηκε· οι θέσεις και οι αναδρομές είναι προσεγγιστικές.")
+        except Exception:
+            pass
         if aspects:
             if HAS_SAC:
                 try:
