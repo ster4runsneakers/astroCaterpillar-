@@ -122,8 +122,13 @@ def _positions_swe(year, month, day, hour_decimal, tz_name=DEFAULT_TZ):
     except Exception:
         pass
     positions = {}
+    flags = swe.FLG_MOSEPH | swe.FLG_SPEED  # δεν χρειάζεται αρχεία .se1
     for name, body in bodies.items():
-        xx, _ret = swe.calc_ut(jd_ut, body)
+        try:
+            xx, _ret = swe.calc_ut(jd_ut, body, flags)
+        except Exception:
+            # π.χ. Chiron χρειάζεται εξωτερικό αρχείο — παραλείπεται, ΔΕΝ ρίχνει όλο τον χάρτη
+            continue
         lon = xx[0] % 360.0
         speed = xx[3]
         positions[name] = {
@@ -131,15 +136,60 @@ def _positions_swe(year, month, day, hour_decimal, tz_name=DEFAULT_TZ):
             "is_retro": bool(speed < 0) and name not in ("Sun", "Moon"),
             "speed": round(speed, 5),
         }
+    if not all(p in positions for p in PLANETS):
+        raise RuntimeError("Λείπουν πλανήτες από τον υπολογισμό Swiss Ephemeris")
     return positions
 
 
+LAST_ENGINE = "unknown"
+
+
+def _positions_skyfield(year, month, day, hour_decimal, tz_name=DEFAULT_TZ):
+    """Ακριβής εφεδρική μέθοδος (JPL DE421 μέσω Skyfield) όταν η Swiss Ephemeris αποτύχει."""
+    import os
+    from skyfield.api import Loader
+    from skyfield.framelib import ecliptic_frame
+    hour, minute = _hour_parts(hour_decimal)
+    utc_dt = _local_to_utc(year, month, day, hour, minute, tz_name)
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".skyfield_data")
+    os.makedirs(base, exist_ok=True)
+    load = Loader(base, verbose=False)
+    eph = load("de421.bsp")
+    ts = load.timescale()
+    t = ts.from_datetime(utc_dt)
+    t2 = ts.from_datetime(utc_dt + datetime.timedelta(hours=12))
+    earth = eph["earth"]
+    names = {
+        "Sun": "sun", "Moon": "moon", "Mercury": "mercury", "Venus": "venus",
+        "Mars": "mars", "Jupiter": "jupiter barycenter", "Saturn": "saturn barycenter",
+        "Uranus": "uranus barycenter", "Neptune": "neptune barycenter",
+        "Pluto": "pluto barycenter",
+    }
+    out = {}
+    for p, key in names.items():
+        l1 = earth.at(t).observe(eph[key]).apparent().frame_latlon(ecliptic_frame)[1].degrees
+        l2 = earth.at(t2).observe(eph[key]).apparent().frame_latlon(ecliptic_frame)[1].degrees
+        d = (l2 - l1 + 180.0) % 360.0 - 180.0
+        out[p] = {"deg": round(l1 % 360.0, 4), "is_retro": bool(d < 0) and p not in ("Sun", "Moon")}
+    return out
+
+
 def calculate_natal_positions(year, month, day, hour_decimal, tz_name=DEFAULT_TZ):
+    global LAST_ENGINE
     if HAS_SWE:
         try:
-            return _positions_swe(year, month, day, hour_decimal, tz_name)
+            res = _positions_swe(year, month, day, hour_decimal, tz_name)
+            LAST_ENGINE = "swisseph"
+            return res
         except Exception:
             pass
+    try:
+        res = _positions_skyfield(year, month, day, hour_decimal, tz_name)
+        LAST_ENGINE = "skyfield"
+        return res
+    except Exception:
+        pass
+    LAST_ENGINE = "approx"
     return _positions_approx(year, month, day, hour_decimal)
 
 

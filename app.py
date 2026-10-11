@@ -657,9 +657,9 @@ if menu_choice.startswith("1."):
         else:
             st.caption("Κανένας πλανήτης δεν είναι αναδρομικός σε αυτόν τον χάρτη.")
         try:
-            from ephemeris_engine import HAS_SWE
-            if not HAS_SWE:
-                st.warning("Η βιβλιοθήκη Swiss Ephemeris δεν φορτώθηκε· οι θέσεις και οι αναδρομές είναι προσεγγιστικές.")
+            from ephemeris_engine import LAST_ENGINE
+            if LAST_ENGINE == "approx":
+                st.warning("⚠️ Οι θέσεις των πλανητών είναι ΠΡΟΣΕΓΓΙΣΤΙΚΕΣ (δεν φόρτωσε η Swiss Ephemeris ούτε η εφεδρική μέθοδος). Μην βασίζεσαι σε αυτές.")
         except Exception:
             pass
         if aspects:
